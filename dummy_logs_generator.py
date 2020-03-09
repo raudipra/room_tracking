@@ -1,3 +1,4 @@
+import time
 import random 
 import pymysql
 from datetime import datetime
@@ -8,7 +9,7 @@ def get_camera(db):
     sql = "SELECT name, zone_name FROM cameras"
     cursor.execute(sql)
 
-    cameras = cur.fetchall()
+    cameras = cursor.fetchall()
     idx = random.randint(0, len(cameras)-1)
 
     return cameras[idx][0], cameras[idx][1]
@@ -19,7 +20,7 @@ def get_person(db):
     sql = "SELECT id, portrait FROM persons"
     cursor.execute(sql)
 
-    persons = cur.fetchall()
+    persons = cursor.fetchall()
 
     # 1 means known, 0 unknown
     if random.randint(0, 1):
