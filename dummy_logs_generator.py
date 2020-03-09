@@ -1,9 +1,6 @@
-import cv2
 import time
-import base64
 import random 
 import pymysql
-import numpy as np
 from datetime import datetime
 
 def get_camera(db):
@@ -32,14 +29,6 @@ def get_person(db):
     else:
         # Unknown use portrait from biggest person id
         return persons[-1][0], 'NULL'
-
-def base64_encoded_to_cv_image(base64_string):
-    print(base64_string)
-    decoded_image = base64.b64decode(base64_string)
-    np_image = np.fromstring(decoded_image, np.uint8)
-    image = cv2.imdecode(np_image, cv2.IMREAD_UNCHANGED)
-
-    return image
 
 host = 'localhost'
 username = 'root'
