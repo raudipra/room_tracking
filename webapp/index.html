@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+
+<html class="no-js" lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="shortcut icon" type="image/png" href="static/icons/icon.gif">
+  <title>Personel Form</title>
+
+  <!-- CSS SCRIPTS -->
+  <link rel="stylesheet" href="static/srtdash/assets/css/bootstrap.min.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/font-awesome.min.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/themify-icons.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/metisMenu.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/owl.carousel.min.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/slicknav.min.css">
+
+  <!-- others css -->
+  <link rel="stylesheet" href="static/srtdash/assets/css/typography.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/default-css.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/styles.css">
+  <link rel="stylesheet" href="static/srtdash/assets/css/responsive.css">
+
+  <!-- modernizr css -->
+  <script src="static/srtdash/assets/js/vendor/modernizr-2.8.3.min.js"></script>
+</head>
+
+<body>
+    <!-- page container area start -->
+    <div class="page-container">
+      <!-- sidebar menu area start -->
+      <div class="sidebar-menu">
+        <div class="sidebar-header">
+          <div class="logo">
+            <a href="dashboard.html"><img src="static/icons/cognixy-logo.png" alt="logo"></a>
+          </div>
+        </div>
+        <div class="main-menu">
+          <div class="menu-inner">
+            <nav>
+              <ul class="metismenu" id="menu">
+                <li>
+                  <a href="dashboard.html"><i class="ti-camera"></i><span>Camera</span></a>
+                </li>
+                <li>
+                  <a href="person.html"><i class="ti-user"></i><span>Personnel</span></a>
+                </li>
+                <li>
+                  <a href="javascript:void(0)" aria-expanded="true"><i class="ti-briefcase"></i><span>Data Management</span></a>
+                  <ul class="collapse">
+                    <li><a href="person.html">Personnel</a></li>
+                    <li><a href="javascript:void(0)" aria-expanded="true">Registration</a>
+                      <ul class="collapse">
+                        <li><a href="person_form.html">Personnel</a></li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+                <li>
+                  <a href="javascript:void(0)" aria-expanded="true"><i class="ti-settings"></i><span>Settings</span></a>
+                  <ul class="collapse">
+                    <li><a href="cameras.html">Camera</a></li>
+                    <li><a href="javascript:void(0)" aria-expanded="true">Registration</a>
+                      <ul class="collapse">
+                        <li><a href="camera_form.html">Camera</a></li>
+                      </ul>
+                    </li>
+                  </ul>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </div>
+      </div>
+      <!-- sidebar menu area end -->
+      <!-- main content area start -->
+      <div class="main-content">
+        <!-- header area start -->
+        <div class="header-area">
+          <div class="row align-items-center">
+            <!-- nav and search button -->
+            <div class="col-md-6 col-sm-8 clearfix">
+              <div class="nav-btn pull-left">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+              </div>
+            </div>
+            <!-- profile info & task notification -->
+            <div class="col-md-6 col-sm-4 clearfix">
+              <ul class="notification-area pull-right">
+                <li id="full-view"><i class="ti-fullscreen"></i></li>
+                <li id="full-view-exit"><i class="ti-zoom-out"></i></li>
+                <li class="settings-btn">
+                  <a href="login.html"><i class="ti-power-off"></i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <!-- header area end -->
+        <!-- page title area start -->
+        <div class="page-title-area">
+          <div class="row align-items-center">
+            <div class="col-sm-6">
+              <div class="breadcrumbs-area clearfix">
+               <h4 class="page-title pull-left">Personel Form</h4>
+              </div>
+            </div>
+            <div class="col-sm-6 clearfix">
+              <div class="user-profile pull-right">
+                <h4 class="user-name dropdown-toggle">Admin</i></h4>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- page title area end -->
+        <div class="main-content-inner">
+            <div class="row">
+                <!-- Video stream -->
+                <div class="col-lg-12 mt-5">
+                  <div id="container">
+                    <video autoplay="true" id="videoElement"></video>
+                  </div>
+                </div>
+                <!-- Video stream end -->
+              
+                <!-- Form -->
+                <div class="col-lg-12 mt-5">
+                  <form action="" method="post" enctype="multipart/form-data">
+                    <div class="input-group">
+                      <div class="input-group-prepend">
+                        <span class="input-group-text">Photo 1</span>
+                      </div>
+                      <input type="text" name="" id="photo1", class="form-control", readonly=true required>
+                      <input type="file" id="file-upload1" hidden required/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-dark" id="capture1" type="button">Ambil</button>
+                        <button class="btn btn-outline-dark" id="upload1" type="button">Unggah</button>
+                      </div>
+                      <!-- {% for error in form.photo1.errors %}
+                        <span style="color: red;">[{{ error }}]</span>
+                      {% endfor %} -->
+                    </div>
+
+                    <div class="input-group">
+                      <div class="input-group-prepend">
+                        <span class="input-group-text">Photo 2</span>
+                      </div>
+                      <input type="text" name="" id="photo2", class="form-control", readonly=true required> 
+                      <input type="file" id="file-upload2" hidden required/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-dark" id="capture2" type="button">Ambil</button>
+                        <button class="btn btn-outline-dark" id="upload2" type="button">Unggah</button>
+                      </div>
+                      <!-- {% for error in form.photo2.errors %}
+                        <span style="color: red;">[{{ error }}]</span>
+                      {% endfor %} -->
+                    </div>
+
+                    <div class="input-group">
+                      <div class="input-group-prepend">
+                        <span class="input-group-text">Photo 3</span>
+                      </div>
+                      <input type="text" name="" id="photo3", class="form-control", readonly=true required>
+                      <input type="file" id="file-upload3" hidden required/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-dark" id="capture3" type="button">Ambil</button>
+                        <button class="btn btn-outline-dark" id="upload3" type="button">Unggah</button>
+                      <!-- </div>
+                      {% for error in form.photo3.errors %}
+                        <span style="color: red;">[{{ error }}]</span>
+                      {% endfor %} -->
+                    </div>
+                    <div class="input-group">
+                      <div class="input-group-prepend">
+                        <span class="input-group-text">ID Photo</span>
+                      </div>
+                      <input type="text" name="" id="photo2", class="form-control", readonly=true required>
+                      <input type="file" id="file-upload4" hidden required/>
+                      <div class="input-group-append">
+                        <button class="btn btn-outline-dark" id="capture4" type="button">Ambil</button>
+                        <button class="btn btn-outline-dark" id="upload4" type="button">Unggah</button>
+                      </div>
+                    </div>
+                    
+                    <div class="form-group col-lg-12">
+                      <label class= "col-form-label", for="name" >Name</label>
+                      <input type="text", name="Name", id="name", class ="form-control validate" required> 
+                    </div>
+
+                    <div class="form-group col-lg-12">
+                      <label class= "col-form-label", for="gender" >Gender</label>
+                      <input type="text", id="gender", class="form-control validate " required> 
+                      </div>
+
+                    <div class="form-group col-lg-12"> 
+                      <label  class= "col-form-label", for="email" >Email</label>
+                      <input type="text", id="email", class ="form-control validate" required>
+                    </div>
+
+                    <div class="form-group col-lg-12">
+                      <label  class= "col-form-label", for="phone" >Phone Number</label>
+                      <input type="text", id="phone", class ="form-control validate" required> 
+                    </div>
+                    <button  class="btn btn-flat btn-outline-dark mt-4 pr-4 pl-4">Save</button>
+                   
+                  </form>
+                </div>
+                <!-- Form end -->
+              </div>
+        </div>
+      </div>
+      <!-- main content area end -->
+      <!-- footer area start-->
+      <footer>
+        <div class="footer-area">
+          <p>Cognixy © Copyright <span class="copyright-year"></span>. All right reserved.</a></p>
+        </div>
+      </footer>
+      <!-- footer area end-->
+  </div>
+
+  <!-- JS SCRIPTS -->
+  <script type="text/javascript" src="static/js/jquery-2.2.3.min.js"></script>
+  <script type="text/javascript" src="static/js/notify.min.js"></script>
+
+  <!-- bootstrap 4 js -->
+  <script type="text/javascript" src="static/srtdash/assets/js/popper.min.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/bootstrap.min.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/owl.carousel.min.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/metisMenu.min.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/jquery.slimscroll.min.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/jquery.slicknav.min.js"></script>
+
+  <!-- others plugins -->
+  <script src="static/srtdash/assets/js/plugins.js"></script>
+  <script type="text/javascript" src="static/srtdash/assets/js/scripts.js"></script>
+  <script>
+    $('.copyright-year').html(new Date().getFullYear());
+
+    $(document).ready(function(){
+      $('[data-toggle="tooltip"]').tooltip();
+    });
+  </script>
+  
+  <!-- <script>
+    $.notify('{{message}}', {position: 'top center', className: '{{ category }}'});
+  </script> -->
+
+  <script type="text/javascript">
+    var currentImage = null;
+    var scale = 1;
+    var result = false;
+    var video = document.querySelector("#videoElement");
+
+    if (navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({video: true})
+      .then(function(stream) {
+        video.srcObject = stream;
+      })
+      .catch(function(err0r) {
+        console.log("Something went wrong!");
+      });
+    }
+
+    function initialize() {
+      video = $("#videoElement").get(0);
+
+      $("#capture1").click({photo_id: "1"}, captureImage);
+      $("#capture2").click({photo_id: "2"}, captureImage);
+      $("#capture3").click({photo_id: "3"}, captureImage);
+      $("#capture4").click({photo_id: "4"}, captureImage);
+
+      $("#upload1").click(function() {
+        $('#file-upload1').click();
+      });
+      $("#upload2").click(function() {
+        $('#file-upload2').click();
+      });
+      $("#upload3").click(function() {
+        $('#file-upload3').click();
+      });
+      $("#upload4").click(function() {
+        $('#file-upload4').click();
+      });
+
+      $("#file-upload1").change({photo_id: "1"}, uploadImage);
+      $("#file-upload2").change({photo_id: "2"}, uploadImage);
+      $("#file-upload3").change({photo_id: "3"}, uploadImage);
+      $("#file-upload4").change({photo_id: "4"}, uploadImage);
+    }
+
+    function captureImage(event) {
+      var canvas = document.createElement("canvas");
+      canvas.width = video.videoWidth * scale;
+      canvas.height = video.videoHeight * scale;
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      $('#photo' + event.data.photo_id).val("Mengambil...");
+      $('#photo' + event.data.photo_id).css("background-color", '');
+      $('#photo' + event.data.photo_id).css("background-color", 'rgb(255, 17, 0)');
+      $.notify("Ambil foto " + event.data.photo_id + " gagal! Silahkan coba lagi!", {position: "top center", className: "error"});
+      currentImage = null;
+      // $.post("/admin/check_photo", { dataUrl: canvas.toDataURL() },
+      // function(data, status, jqXHR) {// success callback
+      //   data = 1;
+      //   if (data == '1') {
+      //     $('#photo' + event.data.photo_id).css("background-color", 'rgb(144, 245, 0)');
+      //     $.notify("Ambil foto " + event.data.photo_id + " sukses!", {position: "top center", className: "success"});
+      //     currentImage = canvas.toDataURL();
+      //     $('#photo' + event.data.photo_id).val(canvas.toDataURL());
+      //   } else {
+      //     $('#photo' + event.data.photo_id).css("background-color", 'rgb(255, 17, 0)');
+      //     $.notify("Ambil foto " + event.data.photo_id + " gagal! Silahkan coba lagi!", {position: "top center", className: "error"});
+      //     currentImage = null;
+      //   }
+      // });
+    }
+
+    function uploadImage(event) {
+      var image = $('#file-upload' + event.data.photo_id)[0].files[0];
+      var reader = new FileReader();
+
+      reader.addEventListener("load", function() {
+        $('#photo' + event.data.photo_id).val("Mengunggah...");
+        $('#photo' + event.data.photo_id).css("background-color", '');
+        $('#photo' + event.data.photo_id).css("background-color", 'rgb(144, 245, 0)');
+        $.notify("Unggah foto " + event.data.photo_id + " sukses!", {position: "top center", className: "success"});
+        currentImage = reader.result;
+        $('#photo' + event.data.photo_id).val(reader.result);
+
+        // $.post("/admin/check_photo", { dataUrl: reader.result },
+        // // function(data, status, jqXHR) {// success callback
+        //   if (data == '1') {
+        //     // data = 1;
+        //     $('#photo' + event.data.photo_id).css("background-color", 'rgb(144, 245, 0)');
+        //     $.notify("Unggah foto " + event.data.photo_id + " sukses!", {position: "top center", className: "success"});
+        //     currentImage = reader.result;
+        //     $('#photo' + event.data.photo_id).val(reader.result);
+        //   } else {
+        //     $('#photo' + event.data.photo_id).css("background-color", 'rgb(255, 17, 0)');
+        //     $.notify("Unggah foto " + event.data.photo_id + " gagal! Silahkan coba lagi!", {position: "top center", className: "error"});
+        //     currentImage = null;
+        //     $('#photo' + event.data.photo_id).val("Unggah gagal!");
+        //   }
+        // });
+
+        $('#file-upload' + event.data.photo_id).val('');
+      })
+
+      if (image) {
+        reader.readAsDataURL(image);
+      }
+    }
+
+    $(initialize);
+
+    var department = $('#department');
+    department.change(function(){
+      $('#position option').remove();
+      $.get("/admin/position/bydepartment/"+department.val(),
+        function(data, status){
+          if(data.length > 0){
+            var position = $('#position');
+            for (var i = 0; i < data.length; i++) {
+              position.append('<option value="'+data[i][0]+'">'+data[i][1]+'</option>')
+            }
+          }
+        }
+      );
+    });
+
+  </script>
+  <!-- {% block js_scripts %}{% endblock %} -->
+</body>
+</html>
