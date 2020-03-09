@@ -55,7 +55,7 @@ while True:
     INSERT INTO roomTrackingDB.cameras 
         (creation_time, age, calibratedScore, camera_name, data, gender, image, out_time, score, unknown_person_id, zone_name, person)
     VALUES 
-        ({}, NULL, 0, {}, {}, NULL, 'x', '', 0.5, {}, {}, {})
+        ('{}', NULL, 0, '{}', {}, NULL, 'x', '', 0.5, {}, '{}', {})
     """.format(datetime_timestamp, camera_name, portrait, unknown_person_id, camera_zone, person_id)
     
     cursor.execute(insertion_query)
