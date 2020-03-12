@@ -1,26 +1,15 @@
-# ROOM TRACKING #
+# Room Tracking
 
-This repository contains dummy log generator, room tracking webapp, and backend.
+App for displaying data from tracker in rooms.
 
-### Installation ###
+## Structure
 
-- `git clone https://github.com/raudipra/room_tracking.git`
-- `cd room_tracking`
-- `pip3 install -r requirements.txt`
-- Open mysql & create database with any name, e.g. roomTrackingDB
-- `mysql roomTrackingDB < roomTrackingDB.sql`
+This project is structured to three parts:
 
-### How to Run ###
+1. `client` contains code for the web client.
+2. `server` contains code for the API that is going to be consumed by the client.
+3. `alert-worker` contains code for generating alerts based on the feed received from XYZ. this is intended to be a background worker.
+4. `sql` contains code for related database schemas.
+5. `dummy` and `mockup` contains design/prototype artifacts (images, dummy SQL, dummy worker, etc.).
 
-- Open the dummy_logs_generator.py
-- Edit the host, username, and password for mysql adjusting to your settings.
-- Run the Dummy Log Generator
-	- `python3 dummy_logs_generator.py`
-
-### Mock up ###
-
-- [Click Here](https://www.figma.com/proto/qS5sWa0LxwL3IWC8IDc2rv/Kedai-Sayur?node-id=1%3A2&viewport=184%2C-68%2C0.2273888736963272&scaling=min-zoom)
-
-### Webapp ###
-
-- Inside the webapp folder resides all assets that I did send you during the first project. If you have the more comfortable version for you to develop, just replace the folder.
+Please see the respective `README.md` in each folder for details how to deploy/run each part of the application.
