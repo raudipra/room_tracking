@@ -1,11 +1,13 @@
 <template>
   <div>
     <v-btn x-large
-      class="ma-2"
+      class="pt-10 pb-10 ml-10 mr-10"
       outlined
       @click="clicked">
-      {{ name }} <br/>
-      {{ peopleCount }}
+      <p>
+        <span class="subtitle-1">{{ name }}</span><br/>
+        <span class="title">{{ peopleCount }}</span>
+      </p>
     </v-btn>
     <br/>
     <span class="text-center">

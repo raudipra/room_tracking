@@ -7,7 +7,7 @@
       </v-col>
     </v-row>
     <v-row class="mb-6" no-gutters align="center" justify="center" align-content="center">
-      <v-col cols="4" v-for="zone in zones" :key="zone.id">
+      <v-col cols="4" md="4" xs="12" sm="12" v-for="zone in zones" :key="zone.id">
         <ZoneButton
           :name="zone.name"
           :people-count="zone.peopleCount"
@@ -30,7 +30,7 @@ export default {
     return {
       layoutSrc: 'https://via.placeholder.com/450/300?text=Room+Layout',
       zones: [
-        { id: 1, name: 'Room1', peopleCount: 10, alertRoomActive: false, alertUnknownPerson: true, alertOverstay: false },
+        { id: 1, name: 'VeryLongZone1', peopleCount: 10, alertRoomActive: false, alertUnknownPerson: true, alertOverstay: false },
         { id: 2, name: 'Room2', peopleCount: 5, alertRoomActive: false, alertUnknownPerson: false, alertOverstay: true },
         { id: 2, name: 'Room3', peopleCount: 2, alertRoomActive: true, alertUnknownPerson: false, alertOverstay: false }
       ]
