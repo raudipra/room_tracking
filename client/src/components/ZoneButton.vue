@@ -1,7 +1,8 @@
 <template>
-  <div>
-    <v-btn x-large
-      class="pt-10 pb-10 ml-10 mr-10"
+  <div class="text-center">
+    <v-btn
+      x-large
+      class="pt-10 pb-10 pl-10 pr-10 text-center"
       outlined
       @click="clicked">
       <p>
@@ -10,7 +11,7 @@
       </p>
     </v-btn>
     <br/>
-    <span class="text-center">
+    <div class="text-center">
       <v-tooltip bottom>
         <template v-slot:activator="{ on }">
           <v-icon :class="roomActiveClass" v-on="on">
@@ -35,11 +36,11 @@
         </template>
         <span>Unknown Person</span>
       </v-tooltip>
-    </span>
+    </div>
   </div>
 </template>
 
-<style lang="sass">
+<style lang="sass" scoped>
 @import '~vuetify/src/styles/styles.sass'
 @import '@/styles/_mixins.scss'
 
@@ -89,7 +90,7 @@ export default {
   },
   methods: {
     clicked () {
-      this.$emit('clicked')
+      this.$emit('click')
     }
   }
 }
