@@ -10,6 +10,7 @@
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "dotenv": "^8.2.0",
+    "lodash": "^4.17.15",
     "mysql2": "^2.1.0"
   }
 }
