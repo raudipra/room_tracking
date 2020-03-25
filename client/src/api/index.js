@@ -6,9 +6,11 @@ const ALERT_TYPES = {
   OVERSTAY: 'O'
 }
 
+const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
+
 function getPeopleForZone (zoneId) {
   // TODO stub
-  console.debug(`Getting current people in ${zoneId}`)
+  console.debug(`Getting current people in ${BASE_URL + zoneId}`)
   return new Promise(resolve => {
     setTimeout(() => {
       const mockData = []

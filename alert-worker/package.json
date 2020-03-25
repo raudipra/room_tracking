@@ -4,6 +4,8 @@
   "description": "",
   "main": "src/main.js",
   "scripts": {
+    "start": "npm run dev",
+    "dev": "nodemon src/main.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",
@@ -14,5 +16,8 @@
     "lodash": "^4.17.15",
     "luxon": "^1.22.0",
     "mysql2": "^2.1.0"
+  },
+  "devDependencies": {
+    "faker": "^4.1.0"
   }
 }
