@@ -53,10 +53,10 @@ function addNewFaceLog (camerasAndZones, people, maxTries = 5) {
     cameraZone.camera_name, // camera_name
     isKnown ? null : faker.random.number(), // unknown_person_id
     cameraZone.zone_name, // zone_name
-    isKnown ? person.id : null, // person
+    isKnown ? person : null, // person
   ]))
     .then(() => {
-      console.info(`[${DateTime.local().toSQL()}] New row created.`)
+      console.info(`[${DateTime.local().toSQL()}] New row created. Person: {id: ${person || 'null'}, is_known: ${isKnown}}`)
       setTimeout(() => {
         addNewFaceLog(camerasAndZones, people, maxTries)
       }, INPUT_INTERVAL)

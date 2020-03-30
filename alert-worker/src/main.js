@@ -5,24 +5,49 @@ require('dotenv').config()
 
 const { DateTime, Duration, Settings } = require('luxon')
 Settings.defaultZoneName = process.env.TIMEZONE || 'Asia/Jakarta'
+const WORKER_ID = process.env.WORKER_ID || 'worker'
+const DATETIME_FORMAT = 'yyyy-LL-dd HH:mm:ss'
 
 const ALERT_TYPES = {
   UNKNOWN: 'U',
   UNAUTHORIZED: 'A',
   OVERSTAY: 'O'
 }
-const pool = mysql.createPool({
+const conn = mysql.createConnection({
   host: process.env.DB_HOST,
   port: process.env.DB_PORT || 3306,
   database: process.env.DB_NAME,
   user: process.env.DB_USER,
   password: process.env.DB_PASS,
   multipleStatements: true,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 2,
   Promise: Promise
 })
+
+// converts a non-object array to its respective values
+function arrayToUnion (arr, label) {
+  if (_.isEmpty(arr)) {
+    console.warn('array is empty!')
+    return ''
+  }
+
+  let result = ''
+  result += mysql.format(`SELECT ? as '${label}'`, [arr[0]])
+  for (let i = 1; i < arr.length; i++) {
+    result += mysql.format(' UNION ALL SELECT ?', [arr[i]])
+  }
+  return result
+}
+
+/**
+ * Converts a JS {@link Date} to SQL DateTime string
+ * @param {?Date} dateTime
+ * @returns {?string} SQL-formatted DateTime
+ */
+function formatDateTime (dateTime) {
+  if (_.isUndefined(dateTime) || _.isNull(dateTime)) return null
+
+  return DateTime.fromJSDate(dateTime).toFormat(DATETIME_FORMAT)
+}
 
 /**
  * Steps:
@@ -31,7 +56,7 @@ const pool = mysql.createPool({
  *  a. collect to "person_id": Array<{ "zone_id", "from", "to" }>
  * 3. Update person's location.
  * 4. Generate alert(s) based on the person's latest data
- * 5.
+ * 5. Done
  */
 
 // function assumes that data has been sorted in ascending order, based on the timestamp of the camera log.
@@ -52,7 +77,7 @@ function collectPeopleData (data) {
       const currentLocationData = peopleCurrentZone.get(personId)
       if (currentLocationData.zone_id !== row.zone_id) {
         if (!peopleLocationData.has(personId)) {
-          peopleLocationData.put(personId, [])
+          peopleLocationData.set(personId, [])
         }
 
         peopleLocationData.get(personId).push({
@@ -60,7 +85,7 @@ function collectPeopleData (data) {
           is_known: currentLocationData.is_known,
           zone_id: currentLocationData.zone_id,
           from: currentLocationData.from,
-          to: row.from
+          to: row.creation_time
         })
         peopleCurrentZone.set(personId, {
           zone_id: row.zone_id,
@@ -74,13 +99,25 @@ function collectPeopleData (data) {
   // push current zone data
   peopleCurrentZone.forEach((currentLocationData, personId) => {
     const isKnown = !personId.includes('U-')
-    peopleLocationData.get(personId).push({
-      person_id: isKnown ? personId : personId.substring(2),
-      is_known: isKnown,
-      zone_id: currentLocationData.zone_id,
-      from: currentLocationData.from,
-      to: null
-    })
+    const id = isKnown ? personId : personId.substring(2)
+
+    if (!peopleLocationData.has(personId)) {
+      peopleLocationData.set(personId, [{
+        person_id: id,
+        is_known: isKnown,
+        zone_id: currentLocationData.zone_id,
+        from: currentLocationData.from,
+        to: null
+      }])
+    } else {
+      peopleLocationData.get(personId).push({
+        person_id: id,
+        is_known: isKnown,
+        zone_id: currentLocationData.zone_id,
+        from: currentLocationData.from,
+        to: null
+      })
+    }
   })
 
   return peopleLocationData
@@ -90,41 +127,50 @@ function generateUpdateLocationQueries (existingLocationResults, peopleLocation,
   // update their initial locations
   const sqlUpdateInitialLocation = `
   UPDATE zone_persons
-  SET \`to\` = ?, worker_id = ?
+  SET \`to\` = ?, worker_updated_at = ?
   WHERE person_id = ?
     AND is_known = ${isKnown ? 'TRUE' : 'FALSE'}
     AND \`to\` IS NULL;
   `
   const sqlInsertInitialLocation = `
-    INSERT INTO zone_persons (person_id, is_known, from, \`to\`, worker_id)
-    VALUES (?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?);
+    INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
+    VALUES (?, ?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?);
   `
+
   let queries = ''
   existingLocationResults.forEach(row => {
-    const personKey = isKnown ? row.person_id : `U-${row.person_id}`
+    const personKey = isKnown ? `${row.id}` : `U-${row.id}`
     let firstLocationData = peopleLocation.get(personKey)[0]
     if (row.from === null) { // no existing location. zone_id is also NULL.
       queries += mysql.format(sqlInsertInitialLocation, [
-        row.person_id, firstLocationData.from,
-        firstLocationData.to, WORKER_ID
+        firstLocationData.person_id,
+        firstLocationData.zone_id,
+        formatDateTime(firstLocationData.from),
+        formatDateTime(firstLocationData.to),
+        WORKER_ID
       ])
     } else {
       // check if the FIRST row in the generated new location data indicates that the person has moved from initial location.
       // check this based on the `from` field.
       // data from existing `zone_`
-      const fromExisting = new Date(row.from)
-      let fromFaceLog = new Date(firstLocationData.from)
-      let toFaceLog = _.isNull(firstLocationData.to) ? null : new Date(firstLocationData.to)
+      const fromExisting = row.from
+      let fromFaceLog = firstLocationData.from
+      let toFaceLog = _.isEmpty(firstLocationData.to) ? null : firstLocationData.to
 
       if (toFaceLog === null) {
         if (fromFaceLog >= fromExisting && row.zone_id !== firstLocationData.zone_id) {
           // person moved from initial location.
           queries += mysql.format(sqlUpdateInitialLocation, [
-            firstLocationData.from, WORKER_ID, row.person_id
+            DateTime.fromJSDate(firstLocationData.from).toFormat(DATETIME_FORMAT),
+            WORKER_ID,
+            row.id
           ])
           queries += mysql.format(sqlInsertInitialLocation, [
-            row.person_id, firstLocationData.from,
-            firstLocationData.to, WORKER_ID
+            firstLocationData.person_id,
+            firstLocationData.zone_id,
+            formatDateTime(firstLocationData.from),
+            formatDateTime(firstLocationData.to),
+            WORKER_ID
           ])
         }
       } else {
@@ -136,8 +182,8 @@ function generateUpdateLocationQueries (existingLocationResults, peopleLocation,
             locations.shift()
             if (locations.length >= 1) {
               firstLocationData = locations[0]
-              fromFaceLog = new Date(firstLocationData.from)
-              toFaceLog = _.isNull(firstLocationData.to) ? null : new Date(firstLocationData.to)
+              fromFaceLog = firstLocationData.from
+              toFaceLog = firstLocationData.to || null
               isStale = toFaceLog !== null ? toFaceLog > fromExisting : fromFaceLog > fromExisting
             }
           } while (isStale && locations.length > 0)
@@ -150,22 +196,31 @@ function generateUpdateLocationQueries (existingLocationResults, peopleLocation,
         // same zone
         if (row.zone_id === firstLocationData.zone_id) {
           queries += mysql.format(sqlUpdateInitialLocation, [
-            firstLocationData.to, WORKER_ID, row.person_id
+            formatDateTime(firstLocationData.to),
+            WORKER_ID,
+            firstLocationData.person_id
           ])
         } else { // different zone
           // person moved from initial location.
           if (fromFaceLog >= fromExisting) {
             queries += mysql.format(sqlUpdateInitialLocation, [
-              firstLocationData.from, WORKER_ID, row.person_id
+              formatDateTime(firstLocationData.from),
+              WORKER_ID,
+              firstLocationData.person_id
             ])
           } else {
             queries += mysql.format(sqlUpdateInitialLocation, [
-              row.from, WORKER_ID, row.person_id
+              formatDateTime(row.from),
+              WORKER_ID,
+              firstLocationData.person_id
             ])
           }
           queries += mysql.format(sqlInsertInitialLocation, [
-            row.person_id, firstLocationData.from,
-            firstLocationData.to, WORKER_ID
+            firstLocationData.person_id,
+            firstLocationData.zone_id,
+            formatDateTime(firstLocationData.from),
+            formatDateTime(firstLocationData.to),
+            WORKER_ID
           ])
         }
       }
@@ -185,7 +240,7 @@ function generateAlerts (results) {
   results.forEach(row => {
     const zone = {
       id: row.zone_id,
-      config: JSON.parse(row.zone_config)
+      config: row.config
     }
     row.is_known = Number.parseInt(row.is_known) === 1
 
@@ -219,10 +274,10 @@ function generateAlerts (results) {
 
   return Promise.all(alertQueryPromises)
     .then(results => results.reduce((prev, next) => {
-      const queries = prev.queries || {}
-      const alertUnknownPersonCount = _.has(prev, 'alertCounts.unknownPerson') ? prev.alertCounts.unknown : 0
-      const alertUnauthorizedCount = _.has(prev, 'alertCounts.unauthorized') ? prev.alertCounts.unauthorized : 0
-      const alertOverstayCount = _.has(prev, 'alertCounts.overstay') ? prev.alertCounts.overstay : 0
+      let queries = prev.queries || ''
+      let alertUnknownPersonCount = _.has(prev, 'alertCounts.unknownPerson') ? prev.alertCounts.unknownPerson : 0
+      let alertUnauthorizedCount = _.has(prev, 'alertCounts.unauthorized') ? prev.alertCounts.unauthorized : 0
+      let alertOverstayCount = _.has(prev, 'alertCounts.overstay') ? prev.alertCounts.overstay : 0
 
       if (next.query !== null) {
         queries += next.query
@@ -248,15 +303,7 @@ function generateAlerts (results) {
         }
       }
     }, {}))
-    .then(results => conn.query(results)
-      .then(() => results.alertCounts)
-      .catch(err => {
-        throw err
-      })
-    )
-    .catch(err => {
-      throw err
-    })
+    .then(results => conn.then(c => c.query(results.queries).then(() => results.alertCounts)))
 }
 
 // do a quick check if similar alert in the room has been triggered ALERT_UNKNOWN_ ago.
@@ -283,7 +330,7 @@ function generateAlert(timestamp, personDetails, alertType) {
   const minDuration = Duration.fromObject({
     seconds: backoffSeconds
   })
-  const minTimestamp = timestamp.minus(minDuration).toSQL({ includeOffset: false, includeZone: false })
+  const minTimestamp = timestamp.minus(minDuration).toFormat(DATETIME_FORMAT)
   const sqlCheckExistingAlert = `
     SELECT EXISTS (
       SELECT *
@@ -291,39 +338,55 @@ function generateAlert(timestamp, personDetails, alertType) {
       WHERE zone_id = ?
         AND person_id = ?
         AND is_known = ?
-        AND alert_type = ?
+        AND type = ?
         AND created_at > ?
     )
   `
 
-  return pool.query(sqlCheckExistingAlert, [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp])
-    .then(result => {
-      const hasExistingAlert = Number.parseInt(result) === 1
-      const details = JSON.stringify({ // TODO define for each alert type.
-        from: personDetails.from
+  return conn.then(c =>
+    c.query(sqlCheckExistingAlert, [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp])
+      .then(result => {
+        const hasExistingAlert = Number.parseInt(result) === 1
+        const details = JSON.stringify({ // TODO define for each alert type.
+          from: personDetails.from
+        })
+        return hasExistingAlert ? {
+          alertType: null,
+          query: ''
+        } : {
+          alertType,
+          query: mysql.format(sqlInsertAlert, [
+            personDetails.zone_id, alertType, details, personDetails.person_id, personDetails.is_known, WORKER_ID
+          ])
+        }
       })
-      return hasExistingAlert ? {
-        alertType: null,
-        query: ''
-      } : {
-        alertType,
-        query: mysql.format(sqlInsertAlert, [
-          zoneId, alertType, details, personDetails.person_id, personDetails.is_known, WORKER_ID
-        ])
-      }
+  )
+}
+
+function cancelFirstTransaction (faceLogIds) {
+  if (!firstTransactionCompleted) return
+
+  console.info('Rolling back first transaction')
+  // execute rollback
+  const sqlRollbackFirstTransaction = `
+    DELETE FROM face_logs_processed
+    WHERE face_log_id IN (?);
+  `
+  conn.then(conn => conn.query(sqlRollbackFirstTransaction, [faceLogIds]))
+    .catch(err => {
+      throw err
     })
 }
 
+let firstTransactionCompleted = false
 const JOB_STATE_PROCESSING = 'P'
 const JOB_STATE_DONE = 'D'
 function main () {
-  const WORKER_ID = process.env.WORKER_ID
   const startTime = new Date()
   const faceLogIds = []
-  pool.getConnection()
-    .then(conn => {
+
+  conn.then(conn => {
     // first transaction: get job, mark as PROCESSING
-    let firstTransactionCompleted = false
     const firstTransaction = conn.beginTransaction()
       .then(() => {
         console.debug('Getting face logs data')
@@ -340,44 +403,32 @@ function main () {
         LEFT JOIN face_logs_processed flp ON fl.id = flp.face_log_id
         JOIN cameras c ON fl.camera_name = c.name
         JOIN zones z ON z.name = c.zone_name
-        WHERE flp.state IS NULL
+        WHERE flp.state IS NULL OR (flp.worker_id = ? AND flp.state = ?)
         ORDER BY creation_time
-        LIMIT ${process.env.CHUNK_SIZE || 5000}
+        LIMIT ?
         FOR UPDATE;
         `
-        return conn.query(sql)
+        return conn.query(sql, [WORKER_ID, JOB_STATE_PROCESSING, Number.parseInt(process.env.CHUNK_SIZE || 5000)])
       })
       .then(([results]) => {
         // collect data, mark face_logs_id as processing
         faceLogIds.push(...results.map(r => r.face_log_id))
-        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id) VALUES ?`
+        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id) VALUES ? ON DUPLICATE KEY UPDATE face_log_id=face_log_id;`
 
-        conn.query(sql2, [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID])])
+        return conn.query(sql2, [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID])])
           .then(() => conn.commit())
           .then(() => {
             console.debug('first transaction done.')
             firstTransactionCompleted = true
+            return results
           })
           .catch(err => {
             throw err
           })
-
-        return results
       })
       .catch(err => {
         console.error(err)
-        if (firstTransactionCompleted) {
-          console.info('Rolling back first transaction')
-          // execute rollback
-          const sqlRollbackFirstTransaction = `
-            DELETE FROM face_logs_processed
-            WHERE face_log_id IN ?
-          `
-          conn.query(sqlRollbackFirstTransaction, [faceLogIds])
-            .catch(err => {
-              throw err
-            })
-        }
+        cancelFirstTransaction(faceLogIds)
         throw err
       })
 
@@ -389,7 +440,7 @@ function main () {
         peopleLocation = collectPeopleData(rows)
         const knownPeopleIds = []
         const unknownPeopleIds = []
-        peopleLocation.keys().forEach(personId => {
+        Array.from(peopleLocation.keys()).forEach(personId => {
           if (!personId.includes('U-')) {
             knownPeopleIds.push(personId)
           } else {
@@ -415,7 +466,7 @@ function main () {
             zp.person_id = persons.id AND
             zp.is_known = true AND
             zp.\`to\` IS NULL
-          WHERE persons.id IN ?
+          WHERE persons.id IN (?)
           FOR UPDATE
         `
         console.debug('Locking known people locations')
@@ -424,7 +475,10 @@ function main () {
         return conn.query(sqlLockPeople, [knownPeopleIds])
           .then(results => {
             let queries = generateUpdateLocationQueries(results[0], peopleLocation, true)
-            console.debug(queries)
+            if (queries === '') {
+              return { peopleLocation, unknownPeopleIds }
+            }
+
             return conn.query(queries)
               .then(() => ({ peopleLocation, unknownPeopleIds }))
           })
@@ -434,20 +488,29 @@ function main () {
       })
       .then(({ peopleLocation, unknownPeopleIds }) => {
         const sqlLockUnknownPeopleLocation = `
-          SELECT zone_id, person_id, from
-          FROM zone_people
-          WHERE person_id IN ?
-            AND is_known iS FALSE
+          SELECT
+            p.id,
+            zp.zone_id,
+            zp.person_id,
+            zp.\`from\`
+          FROM (
+            ${arrayToUnion(unknownPeopleIds.map(id => Number.parseInt(id)), 'id')}
+          ) p
+          LEFT JOIN zone_persons zp
+            ON zp.person_id = p.id
+            AND is_known IS FALSE
             AND \`to\` IS NULL
           FOR UPDATE
         `
-        console.debug('Locking unknown people locations')
-
-        const query = conn.query(sqlLockUnknownPeopleLocation, [unknownPeopleIds])
+        console.info('Locking unknown people locations')
+        const query = conn.query(sqlLockUnknownPeopleLocation)
           .then(results => {
             // update initial locations
             let queries = generateUpdateLocationQueries(results[0], peopleLocation, false)
-            console.debug(queries)
+            if (_.isEmpty(queries)) {
+              return peopleLocation
+            }
+
             return conn.query(queries)
           })
           .catch(err => {
@@ -459,7 +522,7 @@ function main () {
       .then(peopleLocation => {
         // process remaining data
         const sqlInsertLocationData = `
-          INSERT INTO zone_persons (person_id, is_known, from, \`to\`, worker_id)
+          INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
           VALUES ?;
         `
         const data = []
@@ -469,9 +532,10 @@ function main () {
               // person_id, is_known, from, to, worker_id
               data.push([
                 locations[i].person_id,
+                locations[i].zone_id,
                 locations[i].is_known,
-                locations[i].from,
-                locations[i].to,
+                formatDateTime(locations[i].from),
+                formatDateTime(locations[i].to),
                 WORKER_ID
               ])
             }
@@ -479,8 +543,7 @@ function main () {
         })
 
         if (data.length > 0) {
-          console.debug('Remaining location query: ' + mysql.format(sqlInsertLocationData, data))
-          return conn.query(sqlInsertLocationData, data)
+          return conn.query(sqlInsertLocationData, [data])
         }
       })
       .then(() => {
@@ -490,15 +553,15 @@ function main () {
             zones.id AS zone_id,
             zp.person_id,
             is_known,
-            from,
-            to,
+            \`from\`,
+            \`to\`,
             zones.config AS config
-          FROM zone_people zp
+          FROM zone_persons zp
           JOIN zones ON zp.zone_id = zones.id
-          WHERE worker_id = ?
+          WHERE (worker_created_at = ? OR worker_created_at = ?)
             AND \`to\` IS NULL
         `
-        return conn.query(sqlGetPeopleLocation, [WORKER_ID])
+        return conn.query(sqlGetPeopleLocation, [WORKER_ID, WORKER_ID])
       })
       .then(([results]) => generateAlerts(results))
       .then(alertDetails => {
@@ -507,7 +570,7 @@ function main () {
         const sqlUpdateJobDone = `
           UPDATE face_logs_processed
           SET state = ?
-          WHERE face_log_id IN ?
+          WHERE face_log_id IN (?)
             AND worker_id = ?;
         `
         return conn.query(sqlUpdateJobDone, [JOB_STATE_DONE, faceLogIds, WORKER_ID])
@@ -518,16 +581,23 @@ function main () {
             const secondsElapsed = (now.getTime() - startTime.getTime()) / 1000
             const totalAlertCount = Object.values(alertDetails).reduce((prev, curr) => prev + curr, 0)
             console.info(`
-            Job finished at [${now.toISOString()}].
-              Time Elapsed: ${secondsElapsed} s.
-              Alerts generated: ${totalAlertCount}:
-                - Unknown ${alertDetails.alertCounts.unknown}
-                - Unauthorized ${alertDetails.alertCounts.unauthorized}
-                - Overstay: ${alertDetails.alertCounts.overstay}`)
+Job finished at [${now.toISOString()}].
+  Time Elapsed: ${secondsElapsed} s.
+  Alerts generated: ${totalAlertCount}.
+    - Unknown: ${alertDetails.unknownPerson}
+    - Unauthorized: ${alertDetails.unauthorized}
+    - Overstay: ${alertDetails.overstay}`
+          )
           })
           .catch(err => {
             throw err
           })
+      })
+      .catch(err => {
+        console.error(err)
+        conn.rollback()
+          .then(() => cancelFirstTransaction(faceLogIds))
+        throw err
       })
     return secondTransaction
   })
