@@ -1,17 +1,35 @@
 const express = require('express')
 const router = express.Router()
+const _ = require('lodash')
 
 const db = require('../db')
 
 router.get('/zones', (req, res) => {
-  db.getZoneGroups()
-    .then(result => {
-      res.json(result)
-    })
+  if (_.has(req.query, 'name')) {
+    const zoneQuery = req.query.name
+    db.getZones(zoneQuery)
+      .then(result => {
+        res.json(result)
+      })
+  } else {
+    db.getZoneGroups()
+      .then(result => {
+        res.json(result)
+      })
+  }
 })
 
 router.get('/alerts', (req, res) => {
-  const zoneIds = req.query.zoneIds.split(',')
+  if (!_.has(req.query, 'zone_ids')) {
+    res.status(400).json({
+      errors: {
+        zone_ids: '`zone_ids` must be defined!'
+      }
+    })
+    return
+  }
+
+  const zoneIds = req.query.zone_ids.split(',')
   db.getAlerts(zoneIds)
     .then(result => {
       res.json(result)
@@ -19,7 +37,16 @@ router.get('/alerts', (req, res) => {
 })
 
 router.get('/zones/persons', (req, res) => {
-  const zoneIds = req.query.zoneIds.split(',')
+  if (!_.has(req.query, 'zone_ids')) {
+    res.status(400).json({
+      errors: {
+        zone_ids: '`zone_ids` must be defined!'
+      }
+    })
+    return
+  }
+
+  const zoneIds = req.query.zone_ids.split(',')
   db.getPeopleInZones(zoneIds)
     .then(result => {
       res.json(result)

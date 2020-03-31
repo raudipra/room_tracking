@@ -53,7 +53,8 @@ export default {
   data: () => ({
     drawer: null,
     drawerItems: [
-      { icon: 'mdi-speedometer', text: 'Dashboard', link: '/dashboard' }
+      { icon: 'mdi-speedometer', text: 'Dashboard', link: '/dashboard' },
+      { icon: 'mdi-file-chart', text: 'Daily Report', link: '/daily-report' }
     ]
   })
 }

@@ -18,6 +18,28 @@ function blobToJpegBase64 (blob) {
   return 'data:image/jpeg;' + Buffer.from(blob).toString('base64')
 }
 
+function getZones (zoneName) {
+  const sql = `
+  SELECT
+    zg.id AS group_id,
+    zg.name AS group_name,
+    z.id AS zone_id,
+    z.name AS zone_name
+  FROM zone_groups zg
+  JOIN zones z ON zg.id = z.group_id
+  WHERE LOWER(z.name) LIKE ?
+  ORDER BY group_id, zone_id
+  `
+  const query = `%${zoneName.toLowerCase()}%` || '%%'
+  return pool.query(sql, [query])
+    .then(([rows]) => rows.map(row => ({
+      id: row.zone_id,
+      name: row.zone_name,
+      group_id: row.group_id,
+      group_name: row.group_name
+    })))
+}
+
 /**
  * Get zones contained within a zone group, with
  * @returns {Promise<{ id: Number,  }>}
@@ -181,6 +203,17 @@ function dismissAlert (alertId) {
 }
 
 function getPeopleInZoneWithin (zoneId, date, fromHour, toHour) {
+  let sql = `
+    SELECT
+    FROM zone_persons
+    WHERE zone_Id = ?
+      AND
+  `
+  const params = [zoneId, date]
+  if (fromHour !== null) {
+    sql += 'AND '
+  }
+
   // TODO stub
   return Promise.resolve([])
 }
@@ -196,8 +229,72 @@ function getPeopleCountHourlyInZone (zoneId, date) {
   return Promise.resolve(data)
 }
 
+function editZone (zoneId, zoneData) {
+  const sql = `
+    UPDATE zones
+    SET
+    WHERE id = ?
+  `
+}
+
+function createZone (zoneData) {
+  let promise
+  const zoneGroup = zoneData.zone_group
+  if (_.isObjectLike(zoneGroup)) {
+    promise = createZoneGroup(zoneGroup)
+  }
+
+  const sql = `
+    INSERT INTO zones (name, description, config, zone_group_id)
+    VALUES (?, ?, ?, ?)
+    RETURNING *
+  `
+  const params = [
+    zoneData.name,
+    zoneData.description,
+    JSON.stringify({
+      is_active: zoneData.is_active,
+      overstay_limit: zoneData.overstay_limit
+    })
+  ]
+
+  if (_.isUndefined(promise)) {
+    // zoneGroup contains ID.
+    params.push(zoneGroup)
+    promise = pool.query(sql, params)
+  } else {
+    // a new zone group has been created. create a data based on this
+    promise.then(newZoneGroup => {
+      params.push(newZoneGroup.id)
+      return pool.query(sql, params)
+    })
+  }
+  return promise.then(([result]) => result[0])
+}
+
+function editZoneGroup (id, zoneGroupData) {
+
+}
+
+function createZoneGroup (zoneGroupData) {
+  const sql = `
+    INSERT INTO zone_groups (name, description, layout_src, config)
+    VALUES (?, ?, ?, ?)
+    RETURNING *
+  `
+  const params = [
+    zoneGroupData.name,
+    zoneGroupData.description
+  ]
+}
+
 module.exports = {
+  getZones,
   getZoneGroups,
+  createZone,
+  editZone,
+  createZoneGroup,
+  editZoneGroup,
   getAlerts,
   getPeopleInZones,
   getPeopleInZoneWithin,

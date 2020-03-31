@@ -6,7 +6,7 @@ const ALERT_TYPES = {
   OVERSTAY: 'O'
 }
 
-const BASE_URL = process.env.BASE_URL || 'http://localhost:3000'
+const BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000'
 
 function getPeopleForZone (zoneId) {
   // TODO stub
