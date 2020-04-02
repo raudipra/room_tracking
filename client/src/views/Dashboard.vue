@@ -1,27 +1,43 @@
 <template>
   <v-row>
     <v-col xs="12">
-      <v-row class="mb-6">
-        <v-col class="text-center">
-          <img :src="layoutSrc" />
-        </v-col>
-      </v-row>
-      <v-row>
-        <v-col
-          v-for="zone in zones"
-          :key="zone.id"
-          :lg="4"
-          :md="6"
-          :sm="12">
-          <ZoneButton
-            @click="openZoneDialog(zone)"
-            :name="zone.name"
-            :people-count="zone.peopleCount"
-            :alert-room-active="zone.alertRoomActive"
-            :alert-unknown-person="zone.alertUnknownPerson"
-            :alert-overstay="zone.alertOverstay"/>
-        </v-col>
-      </v-row>
+      <v-tabs
+        show-arrows>
+        <v-tabs-slider />
+
+        <v-tab
+          v-for="group in zoneGroups"
+          :key="group.id"
+          :href="`#group-${group.id}`">
+          {{ group.name }}
+        </v-tab>
+        <v-tabs-items v-model="activeZoneGroup">
+          <v-tab-item>
+            <v-row class="mb-6">
+              <v-col class="text-center">
+                <img :src="group.layout" v-if="group.layout !== null" />
+                <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col
+                v-for="zone in group.zones"
+                :key="zone.id"
+                :lg="4"
+                :md="6"
+                :sm="12">
+                <ZoneButton
+                  @click="openZoneDialog(zone)"
+                  :name="zone.name"
+                  :people-count="zone.peopleCount"
+                  :alert-unauthorized="zone.alertUnauthorized"
+                  :alert-unknown-person="zone.alertUnknownPerson"
+                  :alert-overstay="zone.alertOverstay"/>
+              </v-col>
+            </v-row>
+          </v-tab-item>
+        </v-tabs-items>
+      </v-tabs>
     </v-col>
     <ZoneDialog
       v-model="dialog"
@@ -32,6 +48,8 @@
 
 <script>
 // @ is an alias to /src
+import _ from 'lodash'
+import api, { ALERT_TYPES } from '@/api'
 import ZoneButton from '@/components/ZoneButton'
 import ZoneDialog from '@/components/ZoneDialog'
 
@@ -40,36 +58,16 @@ export default {
 
   data () {
     return {
-      layoutSrc: 'https://via.placeholder.com/600/300?text=Room+Layout',
-      zones: [
-        {
-          id: 1,
-          name: 'VeryLongZone1',
-          peopleCount: 10,
-          alertRoomActive: false,
-          alertUnknownPerson: true,
-          alertOverstay: false
-        },
-        {
-          id: 2,
-          name: 'Room2',
-          peopleCount: 5,
-          alertRoomActive: false,
-          alertUnknownPerson: false,
-          alertOverstay: true
-        },
-        {
-          id: 3,
-          name: 'Room3',
-          peopleCount: 2,
-          alertRoomActive: true,
-          alertUnknownPerson: false,
-          alertOverstay: false
-        }
-      ],
+      zoneGroups: [],
+      activeZoneGroup: null,
       activeZone: null,
-      dialog: false
+      dialog: false,
+      isLoading: false
     }
+  },
+
+  mounted () {
+    this.refreshZones()
   },
 
   components: {
@@ -97,10 +95,53 @@ export default {
         const currentZone = this.zones[currentZoneIdx]
         currentZone.alertUnknownPerson = alerts.alertUnknownPerson
         currentZone.alertOverstay = alerts.alertOverstay
-        currentZone.alertRoomActive = false
+        currentZone.alertUnauthorized = false
 
         this.$set(this.zones, currentZoneIdx, currentZone)
       }
+    },
+
+    refreshZones () {
+      if (this.isLoading) {
+        return
+      }
+      const vm = this
+      vm.isLoading = true
+      api.getZones()
+        .then(zoneGroups => {
+          zoneGroups.map(zoneGroup => {
+            zoneGroup.zones = zoneGroup.zones.map(zone => {
+              const alerts = zone.alerts
+              Object.values(ALERT_TYPES).forEach(alertType => {
+                const val = _.has(alerts, alertType) ? alerts[alertType] : false
+                switch (alertType) {
+                  case ALERT_TYPES.UNKNOWN:
+                    zone.alertUnknownPerson = val
+                    break
+                  case ALERT_TYPES.UNAUTHORIZED:
+                    zone.alertUnauthorized = val
+                    break
+                  case ALERT_TYPES.OVERSTAY:
+                    zone.alertOverstay = val
+                    break
+                }
+              })
+
+              delete zone.alerts
+              return zone
+            })
+            return zoneGroup
+          })
+          return zoneGroups
+        })
+        .then(zoneGroups => {
+          vm.zoneGroups = zoneGroups
+          vm.isLoading = false
+        })
+        .catch(err => {
+          vm.isLoading = false
+          console.error(err)
+        })
     }
   }
 }

@@ -1,35 +1,10 @@
-const mysql = require('mysql2/promise')
 const _ = require('lodash')
-const faker = require('faker')
-const DateTime = require('luxon').DateTime
 
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  multipleStatements: true,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 2
-})
+const db = require('../config/db')
+const pool = db.pool
+const blobToJpegBase64 = db.blobToJpegBase64
 
-const DATETIME_FORMAT = 'yyyy-LL-dd HH:mm:ss'
-/**
- * Converts a JS {@link Date} to SQL DateTime string
- * @param {?Date} dateTime
- * @returns {?string} SQL-formatted DateTime
- */
-function formatDateTime (dateTime) {
-  if (_.isUndefined(dateTime) || _.isNull(dateTime)) return null
-
-  return DateTime.fromJSDate(dateTime).toFormat(DATETIME_FORMAT)
-}
-
-function blobToJpegBase64 (blob) {
-  return 'data:image/jpeg;' + Buffer.from(blob).toString('base64')
-}
+const NotFoundError = require('../utils/errors').NotFoundError
 
 /**
  * @typedef ZoneWithGroup
@@ -57,7 +32,8 @@ function getZones (zoneName) {
   ORDER BY group_id, zone_id
   `
   const query = _.isString(zoneName) ? `%${zoneName.toLowerCase()}%` : '%%'
-  return pool.query(sql, [query])
+  return pool.getConnection()
+    .then(c => c.query(sql, [query]))
     .then(([rows]) => rows.map(row => ({
       id: row.zone_id,
       name: row.zone_name,
@@ -68,6 +44,13 @@ function getZones (zoneName) {
 
 /**
  * @typedef ZoneGroup
+ * @type {object}
+ * @property {number} id - ID of the group
+ * @property {string} layout - URL/path to the layout image.
+ * @property {string} name - name of the group.
+ */
+/**
+ * @typedef ZoneGroupWithZones
  * @type {object}
  * @property {number} id - ID of the group
  * @property {string} layout - URL/path to the layout image.
@@ -83,24 +66,52 @@ function getZones (zoneName) {
  */
 /**
  * Get groups of zones, including the number of persons currently inside each zone.
- * @returns {Promise<Array<ZoneGroup>>}
+ * @returns {Promise<Array<ZoneGroupWithZones>>}
  */
 function getZoneGroups () {
   const sql = `
-    SELECT
-      zg.id AS group_id,
-      zg.name AS group_name,
-      zg.layout_src AS group_layout,
-      z.id AS zone_id,
-      z.name AS zone_name,
-      SUM(CASE WHEN zp.person_id IS NULL THEN 0 ELSE 1 END) AS current_persons_count
-    FROM zone_groups zg
-    JOIN zones z ON zg.id = z.group_id
-    LEFT JOIN zone_persons zp ON z.id = zp.zone_id AND zp.to IS NULL
-    GROUP BY group_id, group_name, group_layout, zone_id, zone_name
-    ORDER BY group_id, zone_id
+SELECT
+  zg.id AS group_id,
+  zg.name AS group_name,
+  zg.layout_src AS group_layout,
+  z1.id AS zone_id,
+  z1.name AS zone_name,
+  current_persons_count,
+  alert_type,
+  has_alert
+FROM zone_groups zg
+JOIN zones z1 ON zg.id = z1.zone_group_id
+JOIN (
+  SELECT
+    z.id,
+   SUM(CASE WHEN zp.person_id IS NULL THEN 0 ELSE 1 END) AS current_persons_count
+  FROM zones z
+  LEFT JOIN zone_persons zp ON z.id = zp.zone_id AND zp.to IS NULL
+  GROUP BY z.id
+) zp1 ON zp1.id = z1.id
+JOIN (
+  SELECT
+    zones.id,
+    alert_type,
+    za1.id IS NOT NULL AS has_alert
+  FROM zones
+  CROSS JOIN (
+    SELECT 'A' alert_type UNION ALL SELECT 'U' UNION ALL SELECT 'O'
+  ) alerts
+  LEFT JOIN zone_alerts za1
+    ON za1.id = (
+      SELECT id
+      FROM zone_alerts za2
+      WHERE za2.zone_id = zones.id
+        AND za2.type = alert_type
+        AND is_dismissed IS FALSE
+      LIMIT 1
+    )
+) zaf ON z1.id = zaf.id
+ORDER BY group_id, zone_id, alert_type
   `
-  return pool.query(sql)
+  return pool.getConnection()
+    .then(c => c.query(sql))
     .then(([rows]) => {
       const data = rows.reduce((prev, current) => {
         const data = prev || {}
@@ -109,27 +120,55 @@ function getZoneGroups () {
             id: current.group_id,
             name: current.group_name,
             layout: current.group_layout,
-            zones: [{
-              id: current.zone_id,
-              name: current.zone_name,
-              persons_count: current.current_persons_count
-            }]
+            zones: {}
           }
-        } else {
-          data[current.group_id].zones.push({
+        }
+        const zones = data[current.group_id].zones
+        if (!_.has(zones, current.zone_id)) {
+          zones[current.zone_id] = {
             id: current.zone_id,
             name: current.zone_name,
-            persons_count: current.current_persons_count
-          })
+            persons_count: Number.parseInt(current.current_persons_count),
+            alerts: { [current.alert_type]: Number.parseInt(current.has_alert) === 1 }
+          }
+        } else {
+          zones[current.zone_id].alerts[current.alert_type] = Number.parseInt(current.has_alert) === 1
         }
         return data
       }, {})
 
-      return Object.values(data)
+      return Object.values(data).map(zoneGroup => {
+        const current = zoneGroup
+        current.zones = Object.values(current.zones)
+
+        return current
+      })
     })
     .catch(err => {
       console.error(err)
       throw err
+    })
+}
+
+function getZoneGroup (zoneGroupId, conn) {
+  const sql = 'SELECT * FROM zone_groups WHERE id = ?'
+  const params = [zoneGroupId]
+
+  return conn.query(sql, params)
+    .then(([results]) => {
+      if (results.length === 0) {
+        throw new NotFoundError('ZoneGroup', zoneGroupId)
+      }
+
+      const zoneGroup = results[0]
+      return {
+        id: zoneGroup.id,
+        name: zoneGroup.name,
+        config: zoneGroup.config,
+        layout: zoneGroup.layout_src,
+        created_at: zoneGroup.created_at,
+        updated_at: zoneGroup.updated_at
+      }
     })
 }
 
@@ -151,7 +190,6 @@ function getAlerts (zoneIds, isDismissed = null) {
     FROM zone_alerts za
     LEFT JOIN persons p ON za.person_id = p.id AND za.is_known = 1
     WHERE za.zone_id IN (?)
-      AND za.created_at BETWEEN DATE_SUB(now(), INTERVAL 24 HOUR) AND now()
     ORDER BY created_at DESC
   `
   const args = [zoneIds]
@@ -161,7 +199,8 @@ function getAlerts (zoneIds, isDismissed = null) {
     args.push(isDismissed ? 1 : 0)
   }
 
-  return pool.query(sql, args)
+  return pool.getConnection()
+    .then(c => c.query(sql, args))
     .then(([rows]) => {
       const data = {}
       rows.forEach(row => {
@@ -169,7 +208,7 @@ function getAlerts (zoneIds, isDismissed = null) {
         if (!_.has(data, zoneId)) {
           data[zoneId] = []
         }
-        const details = JSON.parse(row.details)
+        const details = row.details
         data[zoneId].push({
           id: row.id,
           type: row.type,
@@ -208,7 +247,8 @@ function getPeopleInZones (zoneIds) {
       AND zp.id IN (?)
     ORDER BY zp.from
   `
-  return pool.query(sql, [zoneIds])
+  return pool.getConnection()
+    .then(c => c.query(sql, [zoneIds]))
     .then(([rows]) => rows.map(row => {
       return {
         id: row.id,
@@ -232,15 +272,16 @@ function dismissAlert (alertId) {
     WHERE id = ?
     RETURNING id, type, details, created_at, updated_at, person_id, is_known, is_dismissed
   `
-  return pool.query(sql, [alertId])
+  return pool.getConnection()
+    .then(c => c.query(sql, [alertId]))
     .then(([results]) => {
       const alert = results[0]
       return {
         id: alert.id,
         type: alert.type,
         details: JSON.parse(alert.details),
-        created_at: alert.created_at,
-        updated_at: alert.updated_at,
+        created_at: alert.created_at.toISOString(),
+        updated_at: alert.updated_at.toISOString(),
         person_id: alert.person_id,
         is_known: Number.parseInt(alert.is_known) === 1,
         is_dismissed: Number.parseInt(alert.is_dismissed) === 1
@@ -274,11 +315,11 @@ function getPeopleInZoneByDate (zoneId, date) {
     .then(conn => conn.query(sql, params))
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
-      is_known: Number.parseInt(zp.is_known) === 1,
+      is_known: Number.parseInt(row.is_known) === 1,
       person_name: row.person_name,
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
-      from: formatDateTime(row.from),
-      to: formatDateTime(row.to)
+      from: row.from.toISOString(),
+      to: row.to.toISOString()
     })))
 }
 
@@ -303,27 +344,61 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
     .then(conn => conn.query(sql, params))
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
-      is_known: Number.parseInt(zp.is_known) === 1,
+      is_known: Number.parseInt(row.is_known) === 1,
       person_name: row.person_name,
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
-      from: formatDateTime(row.from),
-      to: formatDateTime(row.to)
+      from: row.from.toISOString(),
+      to: row.to.toISOString()
     })))
 }
 
 function getPeopleCountHourlyInZone (zoneId, date) {
   const sql = `
+  SELECT
+    ts_hour,
+    SUM(CASE WHEN person_id IS NULL THEN 0 ELSE 1 END) AS persons_count
+  FROM(
     SELECT
+      v.ts_hour,
+      zpf.person_id,
+      zpf.is_known
     FROM
+    -- generates a series of hourly timestamp, from beginning of UNIX epoch up to 2084-01-29 15:00:00
+    (select TIMESTAMPADD(HOUR, t5.i*100000 + t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i, '1970-01-01 00:00:00') ts_hour from
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t0,
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t1,
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t2,
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t3,
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t4,
+        (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t5) v
+    LEFT JOIN
+    (
+    SELECT
+      person_id,
+      is_known,
+      TIMESTAMP(DATE_FORMAT(zp.\`from\`, '%Y-%m-%d %H:00:00')) AS ts_from,
+      TIMESTAMP(DATE_FORMAT(zp.\`to\`, '%Y-%m-%d %H:00:00')) AS ts_to
+    FROM zone_persons zp
+    WHERE zone_id = ?
+    AND ((DATE(zp.\`from\`) >= ? AND DATE(zp.\`to\`) <= ?)
+      OR (DATE(zp.\`from\`) <= ? AND zp.\`to\` IS NULL))
+    ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL))
+    WHERE ts_hour BETWEEN ? AND ?
+    GROUP BY v.ts_hour, zpf.person_id, zpf.is_known -- count hourly as 1
+  )
+  GROUP BY ts_hour
+  ORDER BY ts_hour;
   `
-  // TODO
-  const data = {}
-  for (let i = 0; i <= 24; i++) {
-    const hour = `${('0' + i).slice(-2)}:00`
-    data[hour] = faker.random.number({ min: 0, max: 50, precision: 0 })
-  }
+  const tsStart = `${date} 00:00:00`
+  const tsEnd = `${date} 23:00:00`
+  const params = [zoneId, date, date, date, tsStart, tsEnd]
 
-  return Promise.resolve(data)
+  return pool.getConnection()
+    .then(c => c.query(sql, params))
+    .then(([rows]) => rows.map(row => ({
+      hour: row.ts_hour.getHour(),
+      persons_count: row.persons_count
+    })))
 }
 
 function editZone (zoneId, zoneData) {
@@ -337,7 +412,48 @@ function editZone (zoneId, zoneData) {
     UPDATE zones
     SET name = ?, description = ?, config = ?, zone_group_id = ?
     WHERE id = ?
+    RETURNING *
   `
+
+  const params = [
+    zoneData.name,
+    zoneData.description,
+    JSON.stringify({
+      is_active: zoneData.is_active,
+      overstay_limit: zoneData.overstay_limit
+    })
+  ]
+  if (_.isUndefined(promise)) {
+    params.push(zoneGroup)
+    params.push(zoneId)
+
+    let existingZoneGroup
+    promise = pool.getConnection()
+      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+      .then(zoneGroup => {
+        existingZoneGroup = zoneGroup
+        return pool.getConnection().then(c => c.query(sql, params))
+      })
+      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
+  } else {
+    promise.then(newZoneGroup => {
+      params.push(newZoneGroup.id)
+      params.push(zoneId)
+      return pool.getConnection()
+        .then(c => c.query(sql, params))
+        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
+    })
+  }
+  return promise.then(({ result, zoneGroup }) => {
+    const data = result[0]
+
+    data.created_at = data.created_at.toISOString()
+    data.updated_at = data.updated_at.toISOString()
+    delete data.zone_group_id
+    data.zone_group = zoneGroup
+
+    return data
+  })
 }
 
 function createZone (zoneData) {
@@ -363,16 +479,34 @@ function createZone (zoneData) {
 
   if (_.isUndefined(promise)) {
     // zoneGroup contains ID.
-    params.push(zoneGroup)
-    promise = pool.query(sql, params)
+
+    let existingZoneGroup
+    promise = pool.getConnection()
+      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+      .then(zoneGroup => {
+        existingZoneGroup = zoneGroup
+        return pool.getConnection().then(c => c.query(sql, params))
+      })
+      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
   } else {
     // a new zone group has been created. create a data based on this
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
-      return pool.query(sql, params)
+      return pool.getConnection()
+        .then(c => c.query(sql, params))
+        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
     })
   }
-  return promise.then(([result]) => result[0])
+  return promise.then(({ result, zoneGroup }) => {
+    const data = result[0]
+
+    data.created_at = data.created_at.toISOString()
+    data.updated_at = data.updated_at.toISOString()
+    delete data.zone_group_id
+    data.zone_group = zoneGroup
+
+    return data
+  })
 }
 
 function editZoneGroup (id, zoneGroupData) {
@@ -396,8 +530,8 @@ function editZoneGroup (id, zoneGroupData) {
       id: rows[0].id,
       name: rows[0].name,
       description: rows[0].description,
-      created_at: rows[0].created_at,
-      updated_at: rows[0].updated_at,
+      created_at: rows[0].created_at.toISOString(),
+      updated_at: rows[0].updated_at.toISOString(),
       layout: rows[0].layout_src,
       config: rows[0].config
     }))
@@ -422,8 +556,8 @@ function createZoneGroup (zoneGroupData) {
       id: rows[0].id,
       name: rows[0].name,
       description: rows[0].description,
-      created_at: rows[0].created_at,
-      updated_at: rows[0].updated_at,
+      created_at: rows[0].created_at.toISOString(),
+      updated_at: rows[0].updated_at.toISOString(),
       layout: rows[0].layout_src,
       config: rows[0].config
     }))

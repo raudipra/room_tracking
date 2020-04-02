@@ -14,8 +14,8 @@
     <div class="text-center">
       <v-tooltip bottom>
         <template v-slot:activator="{ on }">
-          <v-icon :class="roomActiveClass" v-on="on">
-            {{ alertRoomActive ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline' }}
+          <v-icon :class="unauthorizedClass" v-on="on">
+            {{ alertUnauthorized ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline' }}
           </v-icon>
         </template>
         <span>Room should be inactive</span>
@@ -67,14 +67,14 @@ export default {
   props: {
     name: String,
     peopleCount: Number,
-    alertRoomActive: Boolean,
+    alertUnauthorized: Boolean,
     alertUnknownPerson: Boolean,
     alertOverstay: Boolean
   },
   computed: {
-    roomActiveClass () {
+    unauthorizedClass () {
       return {
-        'alert-room-active': this.alertRoomActive
+        'alert-unauthorized': this.alertUnauthorized
       }
     },
     unknownPersonClass () {

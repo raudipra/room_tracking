@@ -1,4 +1,5 @@
 import faker from 'faker'
+import axios from 'axios'
 
 const ALERT_TYPES = {
   UNKNOWN: 'U',
@@ -7,6 +8,10 @@ const ALERT_TYPES = {
 }
 
 const BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000'
+
+function getZones () {
+  return axios.get(`${BASE_URL}/zones`)
+}
 
 function getPeopleForZone (zoneId) {
   // TODO stub
@@ -79,5 +84,5 @@ function getAlertLabel (alert) {
 
 export { ALERT_TYPES, getAlertLabel }
 export default {
-  getPeopleForZone, getAlertsForZone, dismissAlert
+  getZones, getPeopleForZone, getAlertsForZone, dismissAlert
 }

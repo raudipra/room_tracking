@@ -11,9 +11,12 @@
     "cors": "^2.8.5",
     "debug": "~2.6.9",
     "express": "~4.16.1",
+    "express-winston": "^4.0.3",
     "lodash": "^4.17.15",
-    "morgan": "~1.9.1",
-    "mysql2": "^2.1.0"
+    "luxon": "^1.22.2",
+    "mysql2": "^2.1.0",
+    "sharp": "^0.25.2",
+    "winston": "^3.2.1"
   },
   "license": "SEE LICENSE IN LICNESE",
   "devDependencies": {
