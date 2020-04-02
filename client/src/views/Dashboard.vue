@@ -2,6 +2,7 @@
   <v-row>
     <v-col xs="12">
       <v-tabs
+        grow
         show-arrows>
         <v-tabs-slider />
 
@@ -12,29 +13,31 @@
           {{ group.name }}
         </v-tab>
         <v-tabs-items v-model="activeZoneGroup">
-          <v-tab-item>
-            <v-row class="mb-6">
-              <v-col class="text-center">
-                <img :src="group.layout" v-if="group.layout !== null" />
-                <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
-              </v-col>
-            </v-row>
-            <v-row>
-              <v-col
-                v-for="zone in group.zones"
-                :key="zone.id"
-                :lg="4"
-                :md="6"
-                :sm="12">
-                <ZoneButton
-                  @click="openZoneDialog(zone)"
-                  :name="zone.name"
-                  :people-count="zone.peopleCount"
-                  :alert-unauthorized="zone.alertUnauthorized"
-                  :alert-unknown-person="zone.alertUnknownPerson"
-                  :alert-overstay="zone.alertOverstay"/>
-              </v-col>
-            </v-row>
+          <v-tab-item v-for="(group, idx) in zoneGroups" :key="idx">
+            <v-lazy>
+              <v-row class="mb-6">
+                <v-col class="text-center">
+                  <img :src="group.layout" v-if="group.layout !== null" />
+                  <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
+                </v-col>
+              </v-row>
+              <v-row>
+                <v-col
+                  v-for="zone in group.zones"
+                  :key="zone.id"
+                  :lg="4"
+                  :md="6"
+                  :sm="12">
+                  <ZoneButton
+                    @click="openZoneDialog(zone)"
+                    :name="zone.name"
+                    :people-count="zone.peopleCount"
+                    :alert-unauthorized="zone.alertUnauthorized"
+                    :alert-unknown-person="zone.alertUnknownPerson"
+                    :alert-overstay="zone.alertOverstay"/>
+                </v-col>
+              </v-row>
+            </v-lazy>
           </v-tab-item>
         </v-tabs-items>
       </v-tabs>
@@ -42,6 +45,8 @@
     <ZoneDialog
       v-model="dialog"
       :zone="activeZone"
+      @people-updated="handlePeopleUpdated"
+      @alerts-updated="handleAlertsUpdated"
       />
   </v-row>
 </template>
@@ -67,12 +72,14 @@ export default {
   },
 
   mounted () {
+    const vm = this
     this.refreshZones()
+      .then(() => {
+        vm.activeZoneGroup = 0
+      })
   },
 
-  components: {
-    ZoneButton, ZoneDialog
-  },
+  components: { ZoneButton, ZoneDialog },
 
   methods: {
     openZoneDialog (zone) {
@@ -81,23 +88,42 @@ export default {
     },
 
     handlePeopleUpdated ({ zone, peopleCount }) {
-      const currentZoneIdx = this.zones.findIndex(z => z.id === zone)
+      const vm = this
+      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
+      if (activeZoneGroupIdx === -1) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        return
+      }
+      const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
+
+      const currentZoneIdx = activeZoneGroup.zones.findIndex(z => z.id === zone)
       if (currentZoneIdx !== -1) {
-        const currentZone = this.zones[currentZoneIdx]
+        const currentZone = activeZoneGroup.zones[currentZoneIdx]
         currentZone.peopleCount = peopleCount
-        this.$set(this.zones, currentZoneIdx, currentZone)
+        activeZoneGroup.zones[currentZoneIdx] = currentZone
+
+        this.$set(this.zoneGroups, activeZoneGroupIdx, activeZoneGroup)
       }
     },
 
     handleAlertsUpdated ({ zone, alerts }) {
-      const currentZoneIdx = this.zones.findIndex(z => z.id === zone)
+      const vm = this
+      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
+      if (activeZoneGroupIdx === -1) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        return
+      }
+      const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
+
+      const currentZoneIdx = activeZoneGroup.zones.findIndex(z => z.id === zone)
       if (currentZoneIdx !== -1) {
-        const currentZone = this.zones[currentZoneIdx]
+        const currentZone = activeZoneGroup.zones[currentZoneIdx]
         currentZone.alertUnknownPerson = alerts.alertUnknownPerson
         currentZone.alertOverstay = alerts.alertOverstay
-        currentZone.alertUnauthorized = false
+        currentZone.alertUnauthorized = alerts.alertUnauthorized
+        activeZoneGroup.zones[currentZoneIdx] = currentZone
 
-        this.$set(this.zones, currentZoneIdx, currentZone)
+        this.$set(this.zoneGroups, activeZoneGroupIdx, activeZoneGroup)
       }
     },
 

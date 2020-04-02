@@ -7,7 +7,7 @@ const validator = require('./validator')
 
 const router = express.Router()
 
-router.get('/', (req, res) => {
+router.get('/', (req, res, next) => {
   if (_.has(req.query, 'name')) {
     const zoneQuery = req.query.name
     dao.getZones(zoneQuery)
@@ -19,10 +19,12 @@ router.get('/', (req, res) => {
       .then(result => {
         res.json(result)
       })
+      .catch(next)
   }
 })
 
-router.post('/', (req, res) => {
+router.post('/', (req, res, next) => {
+  // TODO check csrf
   const postData = req.body
 
   if (!_.isObjectLike(postData)) {
@@ -58,25 +60,27 @@ router.post('/', (req, res) => {
     if (hasUploadedFile) {
       // TODO remove uploaded file
     }
-    throw err
+    next(err)
   })
 })
 
-router.post('/groups', (req, res) => {
+router.post('/groups', (req, res, next) => {
+  // TODO check csrf
+  // TODO implement edit zone group
+  res.status(501).json({
+    errors: { message: 'Not implemented' }
+  })
+})
+
+router.patch('/groups/:groupId', (req, res, next) => {
+  // TODO check csrf
   // TODO implement edit zone
   res.status(501).json({
     errors: { message: 'Not implemented' }
   })
 })
 
-router.patch('/groups/:groupId', (req, res) => {
-  // TODO implement edit zone
-  res.status(501).json({
-    errors: { message: 'Not implemented' }
-  })
-})
-
-router.get('/alerts', (req, res) => {
+router.get('/alerts', (req, res, next) => {
   if (!_.has(req.query, 'zone_ids')) {
     res.status(400).json({
       errors: {
@@ -91,9 +95,29 @@ router.get('/alerts', (req, res) => {
     .then(result => {
       res.json(result)
     })
+    .catch(next)
 })
 
-router.get('/persons', (req, res) => {
+router.patch('/alerts/:alertId', (req, res, next) => {
+  // TODO check csrf
+  const alertId = req.params.alertId || null
+  if (_.isUndefined(alertId) || _.isNull(alertId)) {
+    res.status(400).json({
+      errors: {
+        alertId: 'aletId param is required!'
+      }
+    })
+    return
+  }
+
+  dao.dismissAlert(alertId)
+    .then(result => {
+      res.json(result)
+    })
+    .catch(next)
+})
+
+router.get('/persons', (req, res, next) => {
   if (!_.has(req.query, 'zone_ids')) {
     res.status(400).json({
       errors: {
@@ -108,29 +132,31 @@ router.get('/persons', (req, res) => {
     .then(result => {
       res.json(result)
     })
+    .catch(next)
 })
 
-router.patch('/:zoneId', (req, res) => {
+router.patch('/:zoneId', (req, res, next) => {
   // TODO implement edit zone
   res.status(501).json({
     errors: { message: 'Not implemented' }
   })
 })
 
-router.get('/:zoneId/people', (req, res) => {
+router.get('/:zoneId/people', (req, res, next) => {
   const zoneId = req.params.zoneId
-  dao.getAlerts([zoneId])
+  dao.getPeopleInZones([zoneId])
     .then(result => {
-      res.json(Object.values(result)[0])
+      res.json(result)
     })
+    .catch(next)
 })
 
-router.get('/:zoneId/people-within', (req, res) => {
-  const zoneId = req.param('zoneId', null)
-  const date = req.param('date', null)
+router.get('/:zoneId/people-within', (req, res, next) => {
+  const zoneId = req.params.zoneId || null
+  const date = req.query.date || null
 
-  const fromTs = req.param('ts_from', null)
-  const toTs = req.param('ts_to', null)
+  const fromTs = req.query.ts_from || null
+  const toTs = req.query.ts_to || null
 
   // do validation
   const errors = {}
@@ -165,17 +191,19 @@ router.get('/:zoneId/people-within', (req, res) => {
       .then(result => {
         res.json(result)
       })
+      .catch(next)
   } else {
     dao.getPeopleInZoneByDateTimeRange(zoneId, fromTs, toTs)
       .then(result => {
         res.json(result)
       })
+      .catch(next)
   }
 })
 
-router.get('/:zoneId/daily-count', (req, res) => {
-  const zoneId = req.param('zone_id', null)
-  const date = req.param('date', null)
+router.get('/:zoneId/hourly-count', (req, res, next) => {
+  const zoneId = req.params.zoneId || null
+  const date = req.query.date || null
 
   // do validation
   const errors = {}
@@ -197,6 +225,7 @@ router.get('/:zoneId/daily-count', (req, res) => {
     .then(result => {
       res.json(result)
     })
+    .catch(next)
 })
 
 module.exports = router

@@ -1,4 +1,3 @@
-import faker from 'faker'
 import axios from 'axios'
 
 const ALERT_TYPES = {
@@ -13,60 +12,33 @@ function getZones () {
   return axios.get(`${BASE_URL}/zones`)
 }
 
-function getPeopleForZone (zoneId) {
-  // TODO stub
-  console.debug(`Getting current people in ${BASE_URL + zoneId}`)
-  return new Promise(resolve => {
-    setTimeout(() => {
-      const mockData = []
-      for (let i = 0; i < 10; i++) {
-        mockData.push({
-          id: faker.random.uuid(),
-          name: faker.name.findName(),
-          from: faker.date.between(faker.date.recent(), new Date()),
-          picture: faker.image.avatar(),
-          alerts: []
-        })
-      }
-      resolve(mockData)
-    }, 1000)
-  })
+function getZonesByName (name) {
+  return axios.get(`${BASE_URL}/zones?name=${name}`)
 }
 
-function getAlertsForZone (zoneId) {
+function getPeopleCountHourlyInZone (zoneId, date) {
+  return axios.get(`${BASE_URL}/zones/${zoneId}/hourly-count?date=${date}`)
+}
+
+function getPeopleWihtinDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
+  return axios.get(`${BASE_URL}/zones/${zoneId}/people-within?ts_from=${dateTimeFrom}&ts_to=${dateTimeTo}`)
+}
+
+function getPeopleWihtinDate (zoneId, date) {
+  return axios.get(`${BASE_URL}/zones/${zoneId}/people-within?date=${date}`)
+}
+
+function getPeopleForZone (zoneId) {
+  return axios.get(`${BASE_URL}/zones/${zoneId}/people`)
+}
+
+function getAlertsForZone (zoneId, isDismissed = false) {
   // TODO stub
-  console.debug(`Getting current alerts in ${zoneId}`)
-  return new Promise(resolve => {
-    setTimeout(() => {
-      const alertTypes = Object.values(ALERT_TYPES)
-      const mockData = []
-      for (let i = 0; i < 10; i++) {
-        mockData.push({
-          id: faker.random.uuid(),
-          type: faker.random.arrayElement(alertTypes),
-          created_at: faker.date.recent,
-          is_known: faker.random.boolean(),
-          person: {
-            id: faker.random.uuid(),
-            name: faker.name.findName(),
-            from: faker.date.between(faker.date.recent(), new Date()),
-            picture: faker.image.avatar()
-          }
-        })
-      }
-      resolve(mockData)
-    }, 1000)
-  })
+  return axios.get(`${BASE_URL}/zones/alerts?zone_ids=${zoneId}`)
 }
 
 function dismissAlert (alertId) {
-  // TODO stub
-  console.debug(`Dismissing alert ${alertId}`)
-  return new Promise(resolve => {
-    setTimeout(() => {
-      resolve(true)
-    }, 1000)
-  })
+  return axios.post(`${BASE_URL}/zones/alerts/${alertId}`, { is_dismissed: true })
 }
 
 function getAlertLabel (alert) {
@@ -84,5 +56,12 @@ function getAlertLabel (alert) {
 
 export { ALERT_TYPES, getAlertLabel }
 export default {
-  getZones, getPeopleForZone, getAlertsForZone, dismissAlert
+  getZones,
+  getZonesByName,
+  getPeopleForZone,
+  getAlertsForZone,
+  dismissAlert,
+  getPeopleWihtinDateTimeRange,
+  getPeopleWihtinDate,
+  getPeopleCountHourlyInZone
 }

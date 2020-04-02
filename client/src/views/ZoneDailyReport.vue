@@ -10,20 +10,15 @@
             :items="zones"
             :search-input.sync="zoneSearch"
             cache-items
+            placeholder="Start typing to Search"
             label="Zone"
             item-text="name"
             item-value="id">
             <template v-slot:item="data">
-              <template v-if="typeof data.item !== 'object'">
-                <v-list-item-content v-text="data.item"></v-list-item-content>
-              </template>
-              <template v-else>
-                <v-list-item-content>
-                  <v-list-item-title v-text="data.item.name" />
-                  <v-list-item-subtitle v-text="`Group: ${data.item.group_name}`" />
-                </v-list-item-content>
-              </template>
-            </template>
+              <v-list-item-content>
+                <v-list-item-title v-text="data.item.name" />
+                <v-list-item-subtitle v-text="`Group: ${data.item.group_name}`" />
+              </v-list-item-content>
           </v-autocomplete>
         </v-col>
         <v-col xs="12" sm="6" md="3">
@@ -161,6 +156,8 @@
 <script>
 import { DateTime } from 'luxon'
 
+import api from '@/api'
+
 const headers = [
   { text: 'ID', value: 'id' },
   { text: 'Foto', value: 'picture', sortable: false },
@@ -207,12 +204,6 @@ export default {
     }
   },
 
-  watch: {
-    zoneSearch (val) {
-      val && val !== this.selectedZone && this.queryZones(val)
-    }
-  },
-
   methods: {
     closeFromHourPicker (v) {
       v = v < 10 ? '0' + v : v
@@ -225,11 +216,23 @@ export default {
       this.toHourMenu = false
     },
 
-    queryZones (val) {
+    zoneSearch (zoneName) {
+      // Items have already been requested
       if (this.isZonesLoading) return
 
-      this.zoneLoading = true
-      // TODO api call
+      this.isZonesLoading = true
+      const vm = this
+
+      // Lazily load input items
+      api.getZonesByName(zoneName)
+        .then(results => {
+          vm.isZonesLoading = false
+          vm.results = results
+        })
+        .catch(err => {
+          vm.isZonesLoading = false
+          console.error(err)
+        })
     },
 
     getData () {
