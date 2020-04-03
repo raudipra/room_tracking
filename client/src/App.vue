@@ -54,7 +54,8 @@ export default {
     drawer: null,
     drawerItems: [
       { icon: 'mdi-speedometer', text: 'Dashboard', link: '/dashboard' },
-      { icon: 'mdi-file-chart', text: 'Daily Report', link: '/daily-report' }
+      { icon: 'mdi-file-chart', text: 'Daily Report', link: '/daily-report' },
+      { icon: 'mdi-file-chart', text: 'People Chart', link: '/daily-people-chart' }
     ]
   })
 }

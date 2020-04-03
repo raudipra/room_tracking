@@ -14,6 +14,7 @@ router.get('/', (req, res, next) => {
       .then(result => {
         res.json(result)
       })
+      .catch(next)
   } else {
     dao.getZoneGroups()
       .then(result => {
@@ -155,8 +156,8 @@ router.get('/:zoneId/people-within', (req, res, next) => {
   const zoneId = req.params.zoneId || null
   const date = req.query.date || null
 
-  const fromTs = req.query.ts_from || null
-  const toTs = req.query.ts_to || null
+  let fromTs = req.query.ts_from || null
+  let toTs = req.query.ts_to || null
 
   // do validation
   const errors = {}
@@ -193,6 +194,8 @@ router.get('/:zoneId/people-within', (req, res, next) => {
       })
       .catch(next)
   } else {
+    fromTs = fromTs.replace('T', '')
+    toTs = toTs.replace('T', '')
     dao.getPeopleInZoneByDateTimeRange(zoneId, fromTs, toTs)
       .then(result => {
         res.json(result)

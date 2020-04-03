@@ -8,7 +8,7 @@
             :disabled="isLoading"
             :loading="isZonesLoading"
             :items="zones"
-            :search-input.sync="zoneSearch"
+            :search-input.sync="zoneQuery"
             cache-items
             placeholder="Start typing to Search"
             label="Zone"
@@ -85,7 +85,7 @@ export default {
 
       zones: [],
       zone: null,
-      zoneSearch: null,
+      zoneQuery: null,
       isZonesLoading: false,
 
       isLoading: false,
@@ -93,6 +93,8 @@ export default {
       selectedZone: null,
       data: [],
       chartOptions: {
+        responsive: true,
+        maintainAspectRatio: false,
         scales: {
           yAxes: [{
             ticks: {
@@ -101,6 +103,12 @@ export default {
           }]
         }
       }
+    }
+  },
+
+  watch: {
+    zoneQuery (val) {
+      this.zoneSearch(val)
     }
   },
 
@@ -115,7 +123,7 @@ export default {
       for (let i = 0; i <= 23; i++) {
         labels.push(i)
         if (this.data.length > 0) {
-          data.push(data[i])
+          data.push(this.data[i])
         } else {
           data.push(0)
         }
@@ -125,6 +133,7 @@ export default {
         labels,
         datasets: [{
           label: '# of people',
+          backgroundColor: '#f87979',
           data,
           borderWidth: 1
         }]
@@ -144,7 +153,7 @@ export default {
       api.getZonesByName(zoneName)
         .then(results => {
           vm.isZonesLoading = false
-          vm.results = results
+          vm.zones = results
         })
         .catch(err => {
           vm.isZonesLoading = false

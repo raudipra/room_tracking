@@ -163,11 +163,11 @@ export default {
       api.getAlertsForZone(zone.id)
         .then(alerts => {
           vm.loading = false
-          vm.zoneAlerts = alerts
+          vm.zoneAlerts = alerts[zone.id]
 
           // update people, in case there's new alert for them.
           const updatedPeople = {}
-          alerts.forEach(alert => {
+          vm.zoneAlerts.forEach(alert => {
             if (_.has(updatedPeople, alert.person.id)) {
               const existingAlerts = updatedPeople[alert.person.id].alerts
               if (!existingAlerts.includes(alert.type)) {

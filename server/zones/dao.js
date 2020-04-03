@@ -27,7 +27,7 @@ function getZones (zoneName) {
     z.id AS zone_id,
     z.name AS zone_name
   FROM zone_groups zg
-  JOIN zones z ON zg.id = z.group_id
+  JOIN zones z ON zg.id = z.zone_group_id
   WHERE LOWER(z.name) LIKE ?
   ORDER BY group_id, zone_id
   `
@@ -244,7 +244,7 @@ function getPeopleInZones (zoneIds) {
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.person_id = p.id AND zp.is_known = 1
     WHERE zp.to IS NULL
-      AND zp.id IN (?)
+      AND zp.zone_id IN (?)
     ORDER BY zp.from
   `
   return pool.getConnection()
@@ -348,7 +348,7 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
       person_name: row.person_name,
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
-      to: row.to.toISOString()
+      to: _.isNull(row.to) ? null : row.to.toISOString()
     })))
 }
 
@@ -385,7 +385,7 @@ function getPeopleCountHourlyInZone (zoneId, date) {
     ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL))
     WHERE ts_hour BETWEEN ? AND ?
     GROUP BY v.ts_hour, zpf.person_id, zpf.is_known -- count hourly as 1
-  )
+  ) a
   GROUP BY ts_hour
   ORDER BY ts_hour;
   `
@@ -396,8 +396,8 @@ function getPeopleCountHourlyInZone (zoneId, date) {
   return pool.getConnection()
     .then(c => c.query(sql, params))
     .then(([rows]) => rows.map(row => ({
-      hour: row.ts_hour.getHour(),
-      persons_count: row.persons_count
+      hour: row.ts_hour,
+      persons_count: Number.parseInt(row.persons_count)
     })))
 }
 

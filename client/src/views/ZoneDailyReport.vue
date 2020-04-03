@@ -8,7 +8,7 @@
             :disabled="isLoading"
             :loading="isZonesLoading"
             :items="zones"
-            :search-input.sync="zoneSearch"
+            :search-input.sync="zoneQuery"
             cache-items
             placeholder="Start typing to Search"
             label="Zone"
@@ -19,6 +19,7 @@
                 <v-list-item-title v-text="data.item.name" />
                 <v-list-item-subtitle v-text="`Group: ${data.item.group_name}`" />
               </v-list-item-content>
+            </template>
           </v-autocomplete>
         </v-col>
         <v-col xs="12" sm="6" md="3">
@@ -123,12 +124,6 @@
             :loading="isLoading"
             :headers="headers"
             :items="peopleRecords">
-            <template v-slot:top>
-              <v-toolbar flat>
-                <v-spacer/>
-                <v-btn color="secondary" class="mb-2" @click="refreshData" :disabled="loading">Refresh</v-btn>
-              </v-toolbar>
-            </template>
             <template v-slot:item.picture="{ item }">
               <v-avatar size="36px">
                 <img v-if="item.picture !== null"
@@ -144,7 +139,8 @@
               <span>{{ (new Date(item.from)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
             </template>
             <template v-slot:item.to="{ item }">
-              <span>{{ (new Date(item.to)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
+              <span v-if="item.to === null">-</span>
+              <span v-else>{{ (new Date(item.to)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
             </template>
           </v-data-table>
         </v-col>
@@ -180,8 +176,8 @@ export default {
 
       zones: [],
       zone: null,
-      zoneSearch: null,
       isZonesLoading: false,
+      zoneQuery: null,
 
       date: now.toFormat('yyyy-LL-dd'),
       fromHour: now.toFormat('HH:mm'),
@@ -201,6 +197,12 @@ export default {
     },
     minToHour () {
       return this.fromHour
+    }
+  },
+
+  watch: {
+    zoneQuery (val) {
+      this.zoneSearch(val)
     }
   },
 
@@ -227,7 +229,7 @@ export default {
       api.getZonesByName(zoneName)
         .then(results => {
           vm.isZonesLoading = false
-          vm.results = results
+          vm.zones = results
         })
         .catch(err => {
           vm.isZonesLoading = false
@@ -236,7 +238,23 @@ export default {
     },
 
     getData () {
+      if (this.isLoading) return
+
       // TODO api call
+      const tsFrom = `${this.date}T${this.fromHour}`
+      const tsTo = `${this.date}T${this.toHour}`
+
+      this.isLoading = true
+      const vm = this
+      api.getPeopleWihtinDateTimeRange(this.zone, tsFrom, tsTo)
+        .then(results => {
+          vm.peopleRecords = results
+          vm.isLoading = false
+        })
+        .catch(err => {
+          vm.isLoading = false
+          console.error(err)
+        })
     }
   }
 }

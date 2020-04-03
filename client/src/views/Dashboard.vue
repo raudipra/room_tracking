@@ -2,42 +2,40 @@
   <v-row>
     <v-col xs="12">
       <v-tabs
+        v-model="activeZoneGroup"
         grow
         show-arrows>
         <v-tabs-slider />
 
         <v-tab
           v-for="group in zoneGroups"
-          :key="group.id"
-          :href="`#group-${group.id}`">
+          :key="group.id">
           {{ group.name }}
         </v-tab>
         <v-tabs-items v-model="activeZoneGroup">
-          <v-tab-item v-for="(group, idx) in zoneGroups" :key="idx">
-            <v-lazy>
-              <v-row class="mb-6">
-                <v-col class="text-center">
-                  <img :src="group.layout" v-if="group.layout !== null" />
-                  <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
-                </v-col>
-              </v-row>
-              <v-row>
-                <v-col
-                  v-for="zone in group.zones"
-                  :key="zone.id"
-                  :lg="4"
-                  :md="6"
-                  :sm="12">
-                  <ZoneButton
-                    @click="openZoneDialog(zone)"
-                    :name="zone.name"
-                    :people-count="zone.peopleCount"
-                    :alert-unauthorized="zone.alertUnauthorized"
-                    :alert-unknown-person="zone.alertUnknownPerson"
-                    :alert-overstay="zone.alertOverstay"/>
-                </v-col>
-              </v-row>
-            </v-lazy>
+          <v-tab-item v-for="group in zoneGroups" :key="group.id">
+            <v-row class="mb-6">
+              <v-col class="text-center">
+                <img :src="group.layout" v-if="group.layout !== null" />
+                <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col
+                v-for="zone in group.zones"
+                :key="zone.id"
+                :lg="4"
+                :md="6"
+                :sm="12">
+                <ZoneButton
+                  @click="openZoneDialog(zone)"
+                  :name="zone.name"
+                  :people-count="zone.persons_count"
+                  :alert-unauthorized="zone.alertUnauthorized"
+                  :alert-unknown-person="zone.alertUnknownPerson"
+                  :alert-overstay="zone.alertOverstay"/>
+              </v-col>
+            </v-row>
           </v-tab-item>
         </v-tabs-items>
       </v-tabs>
@@ -71,14 +69,6 @@ export default {
     }
   },
 
-  mounted () {
-    const vm = this
-    this.refreshZones()
-      .then(() => {
-        vm.activeZoneGroup = 0
-      })
-  },
-
   components: { ZoneButton, ZoneDialog },
 
   methods: {
@@ -89,8 +79,8 @@ export default {
 
     handlePeopleUpdated ({ zone, peopleCount }) {
       const vm = this
-      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
-      if (activeZoneGroupIdx === -1) {
+      const activeZoneGroupIdx = this.activeZoneGroup
+      if (_.isUndefined(activeZoneGroupIdx) || _.isNull(activeZoneGroupIdx)) {
         console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
         return
       }
@@ -169,6 +159,10 @@ export default {
           console.error(err)
         })
     }
+  },
+
+  mounted () {
+    this.refreshZones()
   }
 }
 </script>

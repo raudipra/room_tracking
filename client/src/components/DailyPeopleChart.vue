@@ -7,6 +7,12 @@ export default {
 
   mounted () {
     this.renderChart(this.chartdata, this.options)
+  },
+
+  watch: {
+    chartdata (val) {
+      this.renderChart(val, this.options)
+    }
   }
 }
 </script>
