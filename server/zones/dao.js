@@ -1,7 +1,7 @@
 const _ = require('lodash')
+const Promise = require('bluebird')
 
 const db = require('../config/db')
-const pool = db.pool
 const blobToJpegBase64 = db.blobToJpegBase64
 
 const NotFoundError = require('../utils/errors').NotFoundError
@@ -32,14 +32,13 @@ function getZones (zoneName) {
   ORDER BY group_id, zone_id
   `
   const query = _.isString(zoneName) ? `%${zoneName.toLowerCase()}%` : '%%'
-  return pool.getConnection()
-    .then(c => c.query(sql, [query]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [query])
     .then(([rows]) => rows.map(row => ({
       id: row.zone_id,
       name: row.zone_name,
       group_id: row.group_id,
       group_name: row.group_name
-    })))
+    }))))
 }
 
 /**
@@ -110,8 +109,7 @@ JOIN (
 ) zaf ON z1.id = zaf.id
 ORDER BY group_id, zone_id, alert_type
   `
-  return pool.getConnection()
-    .then(c => c.query(sql))
+  return Promise.using(db.getConnection(), conn => conn.query(sql)
     .then(([rows]) => {
       const data = rows.reduce((prev, current) => {
         const data = prev || {}
@@ -147,7 +145,7 @@ ORDER BY group_id, zone_id, alert_type
     .catch(err => {
       console.error(err)
       throw err
-    })
+    }))
 }
 
 function getZoneGroup (zoneGroupId, conn) {
@@ -199,8 +197,7 @@ function getAlerts (zoneIds, isDismissed = null) {
     args.push(isDismissed ? 1 : 0)
   }
 
-  return pool.getConnection()
-    .then(c => c.query(sql, args))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, args)
     .then(([rows]) => {
       const data = {}
       rows.forEach(row => {
@@ -230,7 +227,7 @@ function getAlerts (zoneIds, isDismissed = null) {
         }
       })
       return data
-    })
+    }))
 }
 
 function getPeopleInZones (zoneIds) {
@@ -247,8 +244,7 @@ function getPeopleInZones (zoneIds) {
       AND zp.zone_id IN (?)
     ORDER BY zp.from
   `
-  return pool.getConnection()
-    .then(c => c.query(sql, [zoneIds]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [zoneIds])
     .then(([rows]) => rows.map(row => {
       return {
         id: row.id,
@@ -262,7 +258,7 @@ function getPeopleInZones (zoneIds) {
     .catch(err => {
       console.error(err)
       throw err
-    })
+    }))
 }
 
 function dismissAlert (alertId) {
@@ -272,8 +268,7 @@ function dismissAlert (alertId) {
     WHERE id = ?
     RETURNING id, type, details, created_at, updated_at, person_id, is_known, is_dismissed
   `
-  return pool.getConnection()
-    .then(c => c.query(sql, [alertId]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [alertId])
     .then(([results]) => {
       const alert = results[0]
       return {
@@ -286,7 +281,7 @@ function dismissAlert (alertId) {
         is_known: Number.parseInt(alert.is_known) === 1,
         is_dismissed: Number.parseInt(alert.is_dismissed) === 1
       }
-    })
+    }))
 }
 
 /**
@@ -311,8 +306,7 @@ function getPeopleInZoneByDate (zoneId, date) {
   `
   const params = [zoneId, date]
 
-  return pool.getConnection()
-    .then(conn => conn.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
@@ -320,7 +314,7 @@ function getPeopleInZoneByDate (zoneId, date) {
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
       to: row.to.toISOString()
-    })))
+    }))))
 }
 
 function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
@@ -340,8 +334,7 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
   `
   const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeTo]
 
-  return pool.getConnection()
-    .then(conn => conn.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
@@ -349,7 +342,7 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
       to: _.isNull(row.to) ? null : row.to.toISOString()
-    })))
+    }))))
 }
 
 function getPeopleCountHourlyInZone (zoneId, date) {
@@ -393,12 +386,11 @@ function getPeopleCountHourlyInZone (zoneId, date) {
   const tsEnd = `${date} 23:00:00`
   const params = [zoneId, date, date, date, tsStart, tsEnd]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       hour: row.ts_hour,
       persons_count: Number.parseInt(row.persons_count)
-    })))
+    }))))
 }
 
 function editZone (zoneId, zoneData) {
@@ -428,20 +420,18 @@ function editZone (zoneId, zoneData) {
     params.push(zoneId)
 
     let existingZoneGroup
-    promise = pool.getConnection()
-      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+    promise = Promise.using(db.getConnection(), conn => getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
-        return pool.getConnection().then(c => c.query(sql, params))
+        return db.getConnection().then(c => c.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
+      .then(([result]) => ({ result, zoneGroup: existingZoneGroup })))
   } else {
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
       params.push(zoneId)
-      return pool.getConnection()
-        .then(c => c.query(sql, params))
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
+      return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+        .then(([result]) => ({ result, zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
@@ -481,20 +471,18 @@ function createZone (zoneData) {
     // zoneGroup contains ID.
 
     let existingZoneGroup
-    promise = pool.getConnection()
-      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+    promise = Promise.using(db.getConnection(), conn => /* check if the zone group exists */ getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
-        return pool.getConnection().then(c => c.query(sql, params))
+        return Promise.using(db.getConnection(), conn => conn.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
+      .then(([result]) => ({ result, zoneGroup: existingZoneGroup })))
   } else {
     // a new zone group has been created. create a data based on this
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
-      return pool.getConnection()
-        .then(c => c.query(sql, params))
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
+      return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+        .then(([result]) => ({ result, zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
@@ -524,8 +512,7 @@ function editZoneGroup (id, zoneGroupData) {
     id
   ]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => ({
       id: rows[0].id,
       name: rows[0].name,
@@ -534,7 +521,7 @@ function editZoneGroup (id, zoneGroupData) {
       updated_at: rows[0].updated_at.toISOString(),
       layout: rows[0].layout_src,
       config: rows[0].config
-    }))
+    })))
 }
 
 function createZoneGroup (zoneGroupData) {
@@ -550,8 +537,7 @@ function createZoneGroup (zoneGroupData) {
     JSON.stringify(zoneGroupData.config)
   ]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => ({
       id: rows[0].id,
       name: rows[0].name,
@@ -560,7 +546,7 @@ function createZoneGroup (zoneGroupData) {
       updated_at: rows[0].updated_at.toISOString(),
       layout: rows[0].layout_src,
       config: rows[0].config
-    }))
+    })))
 }
 
 module.exports = {

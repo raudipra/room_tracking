@@ -1,4 +1,5 @@
 const mysql = require('mysql2/promise')
+const bluebird = require('bluebird')
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -9,11 +10,18 @@ const pool = mysql.createPool({
   multipleStatements: true,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 2
+  queueLimit: 2,
+  Promise: bluebird
 })
 
 function blobToJpegBase64 (blob) {
   return 'data:image/jpeg;' + Buffer.from(blob).toString('base64')
 }
 
-module.exports = { pool, blobToJpegBase64 }
+function getConnection () {
+  return pool.getConnection().disposer(conn => {
+    conn.release()
+  })
+}
+
+module.exports = { getConnection, blobToJpegBase64 }
