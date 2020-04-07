@@ -20,3 +20,12 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+*.code-workspace
+
+!.gitkeep
+
+# server stuff
+server/logs/**.log
+server/public/images/uploads/*
+
+!server/public/images/uploads/.gitkeep

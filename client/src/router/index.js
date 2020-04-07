@@ -1,7 +1,10 @@
 import Vue from 'vue'
 import VueRouter from 'vue-router'
+
 import Home from '../views/Home.vue'
 import Dashboard from '../views/Dashboard.vue'
+import ZoneDailyReport from '../views/ZoneDailyReport'
+import ZoneDailyPeopleChart from '../views/ZoneDailyPeopleChart'
 
 Vue.use(VueRouter)
 
@@ -15,6 +18,16 @@ const routes = [
     path: '/dashboard',
     name: 'Dashboard',
     component: Dashboard
+  },
+  {
+    path: '/daily-report',
+    name: 'ZoneDailyReport',
+    component: ZoneDailyReport
+  },
+  {
+    path: '/daily-people-chart',
+    name: 'ZoneDailyReport',
+    component: ZoneDailyPeopleChart
   },
   {
     path: '/about',

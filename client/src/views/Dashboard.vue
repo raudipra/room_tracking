@@ -1,44 +1,168 @@
 <template>
-  <div class="text-center">
-    <v-row class="mb-6" align="center" justify="center" no-gutters>
-      <v-col
-        cols="12">
-          <img :src="layoutSrc" />
-      </v-col>
-    </v-row>
-    <v-row class="mb-6" no-gutters align="center" justify="center" align-content="center">
-      <v-col cols="4" v-for="zone in zones" :key="zone.id">
-        <ZoneButton
-          :name="zone.name"
-          :people-count="zone.peopleCount"
-          :alert-room-active="zone.alertRoomActive"
-          :alert-unknown-person="zone.alertUnknownPerson"
-          :alert-overstay="zone.alertOverstay"/>
-      </v-col>
-    </v-row>
-  </div>
+  <v-row>
+    <v-col xs="12">
+      <v-tabs
+        v-model="activeZoneGroup"
+        grow
+        show-arrows>
+        <v-tabs-slider />
+
+        <v-tab
+          v-for="group in zoneGroups"
+          :key="group.id">
+          {{ group.name }}
+        </v-tab>
+        <v-tabs-items v-model="activeZoneGroup">
+          <v-tab-item v-for="group in zoneGroups" :key="group.id">
+            <v-row class="mb-6">
+              <v-col class="text-center">
+                <img :src="group.layout" v-if="group.layout !== null" />
+                <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
+              </v-col>
+            </v-row>
+            <v-row>
+              <v-col
+                v-for="zone in group.zones"
+                :key="zone.id"
+                :lg="4"
+                :md="6"
+                :sm="12">
+                <ZoneButton
+                  @click="openZoneDialog(zone)"
+                  :name="zone.name"
+                  :people-count="zone.persons_count"
+                  :alert-unauthorized="zone.alertUnauthorized"
+                  :alert-unknown-person="zone.alertUnknownPerson"
+                  :alert-overstay="zone.alertOverstay"/>
+              </v-col>
+            </v-row>
+          </v-tab-item>
+        </v-tabs-items>
+      </v-tabs>
+    </v-col>
+    <ZoneDialog
+      v-model="dialog"
+      :zone="activeZone"
+      @people-updated="handlePeopleUpdated"
+      @alerts-updated="handleAlertsUpdated"
+      />
+  </v-row>
 </template>
 
 <script>
 // @ is an alias to /src
+import _ from 'lodash'
+import api, { ALERT_TYPES } from '@/api'
 import ZoneButton from '@/components/ZoneButton'
+import ZoneDialog from '@/components/ZoneDialog'
 
 export default {
-  name: 'Home',
+  name: 'Dashboard',
 
   data () {
     return {
-      layoutSrc: 'https://via.placeholder.com/450/300?text=Room+Layout',
-      zones: [
-        { id: 1, name: 'Room1', peopleCount: 10, alertRoomActive: false, alertUnknownPerson: true, alertOverstay: false },
-        { id: 2, name: 'Room2', peopleCount: 5, alertRoomActive: false, alertUnknownPerson: false, alertOverstay: true },
-        { id: 2, name: 'Room3', peopleCount: 2, alertRoomActive: true, alertUnknownPerson: false, alertOverstay: false }
-      ]
+      zoneGroups: [],
+      activeZoneGroup: null,
+      activeZone: null,
+      dialog: false,
+      isLoading: false
     }
   },
 
-  components: {
-    ZoneButton
+  components: { ZoneButton, ZoneDialog },
+
+  methods: {
+    openZoneDialog (zone) {
+      this.activeZone = zone
+      this.dialog = true
+    },
+
+    handlePeopleUpdated ({ zone, peopleCount }) {
+      const vm = this
+      const activeZoneGroupIdx = this.activeZoneGroup
+      if (_.isUndefined(activeZoneGroupIdx) || _.isNull(activeZoneGroupIdx)) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        return
+      }
+      const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
+
+      const currentZoneIdx = activeZoneGroup.zones.findIndex(z => z.id === zone)
+      if (currentZoneIdx !== -1) {
+        const currentZone = activeZoneGroup.zones[currentZoneIdx]
+        currentZone.peopleCount = peopleCount
+        activeZoneGroup.zones[currentZoneIdx] = currentZone
+
+        this.$set(this.zoneGroups, activeZoneGroupIdx, activeZoneGroup)
+      }
+    },
+
+    handleAlertsUpdated ({ zone, alerts }) {
+      const vm = this
+      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
+      if (activeZoneGroupIdx === -1) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        return
+      }
+      const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
+
+      const currentZoneIdx = activeZoneGroup.zones.findIndex(z => z.id === zone)
+      if (currentZoneIdx !== -1) {
+        const currentZone = activeZoneGroup.zones[currentZoneIdx]
+        currentZone.alertUnknownPerson = alerts.alertUnknownPerson
+        currentZone.alertOverstay = alerts.alertOverstay
+        currentZone.alertUnauthorized = alerts.alertUnauthorized
+        activeZoneGroup.zones[currentZoneIdx] = currentZone
+
+        this.$set(this.zoneGroups, activeZoneGroupIdx, activeZoneGroup)
+      }
+    },
+
+    refreshZones () {
+      if (this.isLoading) {
+        return
+      }
+      const vm = this
+      vm.isLoading = true
+      api.getZones()
+        .then(zoneGroups => {
+          zoneGroups.map(zoneGroup => {
+            zoneGroup.zones = zoneGroup.zones.map(zone => {
+              const alerts = zone.alerts
+              Object.values(ALERT_TYPES).forEach(alertType => {
+                const val = _.has(alerts, alertType) ? alerts[alertType] : false
+                switch (alertType) {
+                  case ALERT_TYPES.UNKNOWN:
+                    zone.alertUnknownPerson = val
+                    break
+                  case ALERT_TYPES.UNAUTHORIZED:
+                    zone.alertUnauthorized = val
+                    break
+                  case ALERT_TYPES.OVERSTAY:
+                    zone.alertOverstay = val
+                    break
+                }
+              })
+
+              delete zone.alerts
+              return zone
+            })
+            return zoneGroup
+          })
+          return zoneGroups
+        })
+        .then(zoneGroups => {
+          vm.zoneGroups = zoneGroups
+          vm.isLoading = false
+        })
+        .catch(err => {
+          vm.isLoading = false
+          console.error(err)
+        })
+    }
+  },
+
+  mounted () {
+    this.refreshZones()
   }
 }
 </script>

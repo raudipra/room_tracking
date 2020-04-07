@@ -1,18 +1,21 @@
 <template>
-  <div>
-    <v-btn x-large
-      class="ma-2"
+  <div class="text-center">
+    <v-btn
+      x-large
+      class="pt-10 pb-10 pl-10 pr-10 text-center"
       outlined
       @click="clicked">
-      {{ name }} <br/>
-      {{ peopleCount }}
+      <p>
+        <span class="subtitle-1">{{ name }}</span><br/>
+        <span class="title">{{ peopleCount }}</span>
+      </p>
     </v-btn>
     <br/>
-    <span class="text-center">
+    <div class="text-center">
       <v-tooltip bottom>
         <template v-slot:activator="{ on }">
-          <v-icon :class="roomActiveClass" v-on="on">
-            {{ alertRoomActive ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline' }}
+          <v-icon :class="unauthorizedClass" v-on="on">
+            {{ alertUnauthorized ? 'mdi-alert-circle-outline' : 'mdi-check-circle-outline' }}
           </v-icon>
         </template>
         <span>Room should be inactive</span>
@@ -33,11 +36,11 @@
         </template>
         <span>Unknown Person</span>
       </v-tooltip>
-    </span>
+    </div>
   </div>
 </template>
 
-<style lang="sass">
+<style lang="sass" scoped>
 @import '~vuetify/src/styles/styles.sass'
 @import '@/styles/_mixins.scss'
 
@@ -64,14 +67,14 @@ export default {
   props: {
     name: String,
     peopleCount: Number,
-    alertRoomActive: Boolean,
+    alertUnauthorized: Boolean,
     alertUnknownPerson: Boolean,
     alertOverstay: Boolean
   },
   computed: {
-    roomActiveClass () {
+    unauthorizedClass () {
       return {
-        'alert-room-active': this.alertRoomActive
+        'alert-unauthorized': this.alertUnauthorized
       }
     },
     unknownPersonClass () {
@@ -87,7 +90,7 @@ export default {
   },
   methods: {
     clicked () {
-      this.$emit('clicked')
+      this.$emit('click')
     }
   }
 }

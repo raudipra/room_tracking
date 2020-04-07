@@ -38,7 +38,7 @@
       color="indigo"
       app
     >
-      <span class="white--text">&copy; 2019</span>
+      <span class="white--text">&copy; 2020</span>
     </v-footer>
   </v-app>
 </template>
@@ -53,7 +53,9 @@ export default {
   data: () => ({
     drawer: null,
     drawerItems: [
-      { icon: 'mdi-speedometer', text: 'Dashboard', link: '/dashboard' }
+      { icon: 'mdi-speedometer', text: 'Dashboard', link: '/dashboard' },
+      { icon: 'mdi-file-chart', text: 'Daily Report', link: '/daily-report' },
+      { icon: 'mdi-file-chart', text: 'People Chart', link: '/daily-people-chart' }
     ]
   })
 }
