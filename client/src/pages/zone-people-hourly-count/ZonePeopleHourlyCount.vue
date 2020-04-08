@@ -1,79 +1,81 @@
 <template>
-  <v-row>
-    <v-col col="12">
-      <v-row>
-        <v-col xs="12" sm="6" md="4">
-          <v-autocomplete
-            v-model="zone"
-            :disabled="isLoading"
-            :loading="isZonesLoading"
-            :items="zones"
-            :search-input.sync="zoneQuery"
-            cache-items
-            placeholder="Start typing to Search"
-            label="Zone"
-            item-text="name"
-            item-value="id">
-            <template v-slot:item="data">
-              <v-list-item-content>
-                <v-list-item-title v-text="data.item.name" />
-                <v-list-item-subtitle v-text="`Group: ${data.item.group_name}`" />
-              </v-list-item-content>
-            </template>
-          </v-autocomplete>
-        </v-col>
-        <v-col xs="12" sm="4" md="4">
-          <v-menu
-            v-model="dateMenu"
-            :close-on-content-click="false"
-            :nudge-right="40"
-            transition="scale-transition"
-            offset-y
-            :disabled="isLoading"
-            max-width="290px"
-            min-width="290px"
-          >
-            <template v-slot:activator="{ on }">
-              <v-text-field
-                label="Date"
-                prepend-icon="mdi-event"
-                readonly
-                :disabled="isLoading"
-                :value="formDateDisplay"
-                v-on="on"
-              ></v-text-field>
-            </template>
-            <v-date-picker
-              locale="en-in"
-              :max="maxDate"
-              v-model="date"
+  <v-app>
+    <v-content>
+      <v-container fill-height fluid>
+        <v-row>
+          <v-col xs="12" sm="6" md="4">
+            <v-autocomplete
+              v-model="zone"
               :disabled="isLoading"
-              no-title
-              @input="dateMenu = false"
-            ></v-date-picker>
-          </v-menu>
-        </v-col>
-        <v-col xs="6" sm="2" md="2">
-          <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
-        </v-col>
-      </v-row>
-      <v-row>
-        <v-col col="12">
-          <DailyPeopleChart :chartdata="chartData" :options="chartOptions" />
-        </v-col>
-      </v-row>
-    </v-col>
-  </v-row>
+              :loading="isZonesLoading"
+              :items="zones"
+              :search-input.sync="zoneQuery"
+              cache-items
+              placeholder="Start typing to Search"
+              label="Zone"
+              item-text="name"
+              item-value="id">
+              <template v-slot:item="data">
+                <v-list-item-content>
+                  <v-list-item-title v-text="data.item.name" />
+                  <v-list-item-subtitle v-text="`Group: ${data.item.group_name}`" />
+                </v-list-item-content>
+              </template>
+            </v-autocomplete>
+          </v-col>
+          <v-col xs="12" sm="4" md="4">
+            <v-menu
+              v-model="dateMenu"
+              :close-on-content-click="false"
+              :nudge-right="40"
+              transition="scale-transition"
+              offset-y
+              :disabled="isLoading"
+              max-width="290px"
+              min-width="290px"
+            >
+              <template v-slot:activator="{ on }">
+                <v-text-field
+                  label="Date"
+                  prepend-icon="mdi-event"
+                  readonly
+                  :disabled="isLoading"
+                  :value="formDateDisplay"
+                  v-on="on"
+                ></v-text-field>
+              </template>
+              <v-date-picker
+                locale="en-in"
+                :max="maxDate"
+                v-model="date"
+                :disabled="isLoading"
+                no-title
+                @input="dateMenu = false"
+              ></v-date-picker>
+            </v-menu>
+          </v-col>
+          <v-col xs="6" sm="2" md="2">
+            <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
+          </v-col>
+        </v-row>
+        <v-row>
+          <v-col col="12">
+            <HourlyPeopleChart :chartdata="chartData" :options="chartOptions" />
+          </v-col>
+        </v-row>
+      </v-container>
+    </v-content>
+  </v-app>
 </template>
 
 <script>
 import { DateTime } from 'luxon'
 
 import api from '@/api'
-import DailyPeopleChart from '@/components/DailyPeopleChart.vue'
+import HourlyPeopleChart from './components/HourlyPeopleChart.vue'
 
 export default {
-  components: { DailyPeopleChart },
+  components: { HourlyPeopleChart },
 
   data () {
     const now = DateTime.local().startOf('hour')

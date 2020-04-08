@@ -39,11 +39,13 @@ function getPeopleForZone (zoneId) {
 }
 
 function getAlertsForZone (zoneId, isDismissed = false) {
-  return axios.get(`${BASE_URL}/zones/alerts?zone_ids=${zoneId}`).then(response => response.data)
+  return axios.get(`${BASE_URL}/zones/alerts?zone_ids=${zoneId}`)
+    .then(response => response.data)
 }
 
 function dismissAlert (alertId) {
-  return axios.post(`${BASE_URL}/zones/alerts/${alertId}`, { is_dismissed: true }).then(response => response.data)
+  return axios.post(`${BASE_URL}/zones/alerts/${alertId}`, { is_dismissed: true })
+    .then(response => response.data)
 }
 
 function getAlertLabel (alert) {

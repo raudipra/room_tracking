@@ -9,11 +9,15 @@
         <v-btn color="primary" class="mb-2" @click="refreshData" :loading="loading" :disabled="loading">Refresh</v-btn>
       </v-toolbar>
     </template>
-    <template v-slot:item.picture="{ item }">
-      <img :src="item.person.picture"/>
+    <template v-slot:item.avatar="{ item }">
+      <v-avatar size="48">
+        <v-img v-if="item.person.avatar !== null" :src="item.person.avatar"/>
+        <v-img v-else src="/avatar-placeholder.png" />
+      </v-avatar>
     </template>
     <template v-slot:item.name="{ item }">
-      <span>{{ item.person.name }}</span>
+      <span v-if="item.person.name">{{ item.person.name }}</span>
+      <span v-else>UNKNOWN</span>
     </template>
     <template v-slot:item.from="{ item }">
       <span>{{ (new Date(item.person.from)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
@@ -34,7 +38,7 @@ import { DATE_TIME_FORMAT } from '@/common/date-time'
 
 const headers = [
   { text: 'ID', value: 'id' },
-  { text: 'Foto', value: 'picture', sortable: false },
+  { text: 'Foto', value: 'avatar', sortable: false },
   { text: 'Nama', value: 'name' },
   { text: 'Waktu Masuk', value: 'from' },
   { text: 'Keterangan', value: 'type' },
