@@ -1,11 +1,15 @@
 const express = require('express')
+const multer = require('multer')
 const _ = require('lodash')
 const DateTime = require('luxon').DateTime
 
 const dao = require('./dao')
 const validator = require('./validator')
+const utils = require('./utils')
+const logger = require('../config/logger').logger
 
 const router = express.Router()
+const upload = multer()
 
 router.get('/', (req, res, next) => {
   if (_.has(req.query, 'name')) {
@@ -15,8 +19,14 @@ router.get('/', (req, res, next) => {
         res.json(result)
       })
       .catch(next)
+  } else if (_.has(req.query, 'all')) {
+    dao.getZoneGroupsWithZone()
+      .then(result => {
+        res.json(result)
+      })
+      .catch(next)
   } else {
-    dao.getZoneGroups()
+    dao.getZoneGroupsWithPeopleCount()
       .then(result => {
         res.json(result)
       })
@@ -47,7 +57,7 @@ router.post('/', (req, res, next) => {
   let promise
   let hasUploadedFile = false
   if (_.isObjectLike(postData.zone_group)) {
-    //  upload first
+    // DEPRECATED. TODO remove
     hasUploadedFile = true
   }
 
@@ -58,6 +68,7 @@ router.post('/', (req, res, next) => {
       })
   }
   promise.catch(err => {
+    // DEPRECATED. TODO remove
     if (hasUploadedFile) {
       // TODO remove uploaded file
     }
@@ -65,20 +76,91 @@ router.post('/', (req, res, next) => {
   })
 })
 
-router.post('/groups', (req, res, next) => {
+router.post('/groups', upload.single('layout'), (req, res, next) => {
   // TODO check csrf
-  // TODO implement edit zone group
-  res.status(501).json({
-    errors: { message: 'Not implemented' }
-  })
+
+  // validate
+  const zoneGroupData = req.body
+  const errors = validator.validateZoneGroupData(zoneGroupData)
+
+  const layoutFile = req.file
+  if (!layoutFile) {
+    errors.layout = 'Layout file is required!'
+  }
+
+  if (!_.isEmpty(errors)) {
+    res.status(400).json({ errors })
+    return
+  }
+
+  // process
+  let uploadFilePath
+  utils.uploadLayoutFile(layoutFile.buffer.toString('base64'))
+    .then(newFilePath => {
+      zoneGroupData.layout = newFilePath
+      uploadFilePath = newFilePath
+
+      // save to DB
+      return dao.createZoneGroup(zoneGroupData)
+    })
+    .then(result => {
+      res.json(result)
+    })
+    .catch(err => {
+      if (uploadFilePath) {
+        utils.removeExistingLayoutFile(uploadFilePath)
+      }
+      next(err)
+    })
 })
 
-router.patch('/groups/:groupId', (req, res, next) => {
+router.patch('/groups/:groupId', upload.single('layout'), (req, res, next) => {
   // TODO check csrf
-  // TODO implement edit zone
-  res.status(501).json({
-    errors: { message: 'Not implemented' }
+  // validate
+  const zoneGroupData = req.body
+  const groupId = req.params.groupId
+  zoneGroupData.config = {
+    default_overstay_limit: _.get(zoneGroupData, 'default_overstay_limit', null)
+  }
+
+  const errors = validator.validateZoneGroupData(zoneGroupData)
+
+  if (!_.isEmpty(errors)) {
+    res.status(400).json({ errors })
+    return
+  }
+
+  // process
+  const layoutFile = req.file
+  const hasLayoutFile = !!layoutFile
+  let promise
+  if (hasLayoutFile) {
+    let uploadFilePath
+    promise = utils.uploadLayoutFile(layoutFile.buffer.toString('base64'))
+      .then(newFilePath => {
+        uploadFilePath = newFilePath
+        zoneGroupData.layout = newFilePath
+
+        return dao.editZoneGroup(groupId, zoneGroupData)
+      })
+      .catch(err => {
+        if (uploadFilePath) {
+          utils.removeExistingLayoutFile(uploadFilePath)
+            .catch(err => {
+              logger.warn(`Failed to remove uploaded file: ${err}`)
+            })
+        }
+        throw err
+      })
+  } else {
+    promise = dao.editZoneGroup(groupId, zoneGroupData)
+  }
+
+  // process
+  promise.then(result => {
+    res.json(result)
   })
+    .catch(next)
 })
 
 router.get('/alerts', (req, res, next) => {
@@ -137,10 +219,52 @@ router.get('/persons', (req, res, next) => {
 })
 
 router.patch('/:zoneId', (req, res, next) => {
-  // TODO implement edit zone
-  res.status(501).json({
-    errors: { message: 'Not implemented' }
-  })
+  // TODO check csrf
+  const postData = req.body
+  const zoneId = req.params.zoneId
+
+  if (!_.isObjectLike(postData)) {
+    res.status(400).json({
+      errors: {
+        _body: 'This method only accepts JSON.'
+      }
+    })
+    return
+  }
+
+  // validate
+  const errors = validator.validateZoneData(postData)
+  if (!_.isEmpty(errors)) {
+    res.status(400).json({ errors })
+    return
+  }
+
+  // check existence
+  dao.getZone(zoneId)
+    .then(() => {
+      let promise
+      let hasUploadedFile = false
+      if (_.isObjectLike(postData.zone_group)) {
+        //  upload first
+        hasUploadedFile = true
+      }
+
+      if (_.isUndefined(promise)) {
+        promise = dao.editZone(zoneId, postData)
+          .then(result => {
+            res.status(201).json(result)
+          })
+      }
+      promise.catch(err => {
+        if (hasUploadedFile) {
+          // TODO remove uploaded file
+        }
+        next(err)
+      })
+    })
+    .catch(err => {
+      res.status(400).json({ errors: { zoneId: err.message } })
+    })
 })
 
 router.get('/:zoneId/people', (req, res, next) => {

@@ -67,7 +67,7 @@ function getZones (zoneName) {
  * Get groups of zones, including the number of persons currently inside each zone.
  * @returns {Promise<Array<ZoneGroupWithZones>>}
  */
-function getZoneGroups () {
+function getZoneGroupsWithPeopleCount () {
   const sql = `
 SELECT
   zg.id AS group_id,
@@ -145,6 +145,59 @@ ORDER BY group_id, zone_id, alert_type
     .catch(err => {
       console.error(err)
       throw err
+    }))
+}
+
+function getZoneGroupsWithZone (zoneId = null) {
+  const sql = `
+SELECT
+  zg.id AS group_id,
+  zg.name AS group_name,
+  zg.description AS group_description,
+  zg.layout_src AS group_layout,
+  zg.config AS group_config,
+  zg.created_at AS group_created_at,
+  zg.updated_at AS group_updated_at,
+  z.id AS zone_id,
+  z.name AS zone_name,
+  z.description AS zone_description,
+  z.config AS zone_config,
+  z.created_at AS zone_created_at,
+  z.updated_at AS zone_updated_at
+FROM zone_groups zg
+JOIN zones z ON z.zone_group_id = zg.id
+${zoneId ? 'WHERE zg.id=?' : ''}
+ORDER BY group_id, zone_id
+  `
+  return Promise.using(db.getConnection(), conn => (zoneId ? conn.query(sql, [zoneId]) : conn.query(sql))
+    .then(([rows]) => {
+      const data = rows.reduce((prev, current) => {
+        const data = prev || {}
+        if (!_.has(data, current.group_id)) {
+          data[current.group_id] = {
+            id: current.group_id,
+            name: current.group_name,
+            description: current.group_description,
+            layout: current.group_layout,
+            config: current.group_config,
+            created_at: current.group_created_at,
+            updated_at: current.group_updated_at,
+            zones: []
+          }
+        }
+
+        data[current.group_id].zones.push({
+          id: current.zone_id,
+          name: current.zone_name,
+          description: current.zone_description,
+          config: current.zone_config,
+          created_at: current.zone_created_at,
+          updated_at: current.zone_updated_at
+        })
+        return data
+      }, {})
+
+      return Object.values(data)
     }))
 }
 
@@ -402,40 +455,39 @@ function editZone (zoneId, zoneData) {
 
   const sql = `
     UPDATE zones
-    SET name = ?, description = ?, config = ?, zone_group_id = ?
-    WHERE id = ?
-    RETURNING *
+    SET name = ?, description = ?, config = ?, zone_group_id = ?, updated_at = now()
+    WHERE id = ?;
+    SELECT * FROM zones WHERE id = ?
   `
 
   const params = [
     zoneData.name,
     zoneData.description,
-    JSON.stringify({
-      is_active: zoneData.is_active,
-      overstay_limit: zoneData.overstay_limit
-    })
+    JSON.stringify(zoneData.config)
   ]
   if (_.isUndefined(promise)) {
     params.push(zoneGroup)
+    params.push(zoneId)
     params.push(zoneId)
 
     let existingZoneGroup
     promise = Promise.using(db.getConnection(), conn => getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
-        return db.getConnection().then(c => c.query(sql, params))
+        return Promise.using(db.getConnection(), conn => conn.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup })))
+      .then(([result]) => ({ result: result[1][0], zoneGroup: existingZoneGroup })))
   } else {
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
       params.push(zoneId)
+      params.push(zoneId)
       return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup })))
+        .then(([result]) => ({ result: result[1][0], zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
-    const data = result[0]
+    const data = result
 
     data.created_at = data.created_at.toISOString()
     data.updated_at = data.updated_at.toISOString()
@@ -446,6 +498,18 @@ function editZone (zoneId, zoneData) {
   })
 }
 
+function getZone (id) {
+  const sql = 'SELECT * FROM zones WHERE id = ?'
+  const params = [id]
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+    .then(([result]) => {
+      if (result.length === 0) {
+        throw new NotFoundError('Zone', id)
+      }
+      return result[0]
+    }))
+}
+
 function createZone (zoneData) {
   let promise
   const zoneGroup = zoneData.zone_group
@@ -454,17 +518,14 @@ function createZone (zoneData) {
   }
 
   const sql = `
-    INSERT INTO zones (name, description, config, zone_group_id)
-    VALUES (?, ?, ?, ?)
-    RETURNING *
+    INSERT INTO zones (name, description, config, zone_group_id, created_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP);
+    SELECT * FROM zones WHERE id = (SELECT LAST_INSERT_ID())
   `
   const params = [
     zoneData.name,
     zoneData.description,
-    JSON.stringify({
-      is_active: zoneData.is_active,
-      overstay_limit: zoneData.overstay_limit
-    })
+    JSON.stringify(zoneData.config)
   ]
 
   if (_.isUndefined(promise)) {
@@ -474,19 +535,20 @@ function createZone (zoneData) {
     promise = Promise.using(db.getConnection(), conn => /* check if the zone group exists */ getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
+        params.push(zoneGroup.id)
         return Promise.using(db.getConnection(), conn => conn.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup })))
+      .then(([result]) => ({ result: result[1][0], zoneGroup: existingZoneGroup })))
   } else {
     // a new zone group has been created. create a data based on this
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
       return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup })))
+        .then(([result]) => ({ result: result[1][0], zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
-    const data = result[0]
+    const data = result
 
     data.created_at = data.created_at.toISOString()
     data.updated_at = data.updated_at.toISOString()
@@ -500,35 +562,26 @@ function createZone (zoneData) {
 function editZoneGroup (id, zoneGroupData) {
   const sql = `
     UPDATE zone_groups
-    SET name = ?, description = ?, layout_src = ?, config = ?
+    SET name = ?, description = ?, layout_src = COALESCE(?, layout_src), config = ?
     WHERE id = ?
-    RETURNING *
   `
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
     JSON.stringify(zoneGroupData.config),
-    id
+    id, id
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => ({
-      id: rows[0].id,
-      name: rows[0].name,
-      description: rows[0].description,
-      created_at: rows[0].created_at.toISOString(),
-      updated_at: rows[0].updated_at.toISOString(),
-      layout: rows[0].layout_src,
-      config: rows[0].config
-    })))
+    .then(() => getZoneGroupsWithZone(id).then(result => result[0])))
 }
 
 function createZoneGroup (zoneGroupData) {
   const sql = `
-    INSERT INTO zone_groups (name, description, layout_src, config)
-    VALUES (?, ?, ?, ?)
-    RETURNING *
+    INSERT INTO zone_groups (name, description, layout_src, config, created_at)
+    VALUES (?, ?, ?, ?, now());
+    SELECT * FROM zone_groups WHERE id = (SELECT LAST_INSERT_ID())
   `
   const params = [
     zoneGroupData.name,
@@ -538,21 +591,19 @@ function createZoneGroup (zoneGroupData) {
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => ({
-      id: rows[0].id,
-      name: rows[0].name,
-      description: rows[0].description,
-      created_at: rows[0].created_at.toISOString(),
-      updated_at: rows[0].updated_at.toISOString(),
-      layout: rows[0].layout_src,
-      config: rows[0].config
-    })))
+    .then(([result]) => {
+      const data = result[1][0]
+      return getZoneGroupsWithZone(data.id)
+        .then(result => result[0])
+    }))
 }
 
 module.exports = {
   getZones,
-  getZoneGroups,
+  getZoneGroupsWithPeopleCount,
+  getZoneGroupsWithZone,
   createZone,
+  getZone,
   editZone,
   createZoneGroup,
   editZoneGroup,
