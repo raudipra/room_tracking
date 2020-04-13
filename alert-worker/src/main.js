@@ -386,8 +386,9 @@ function main () {
       .then(([results]) => {
         // collect data, mark face_logs_id as processing
         faceLogIds.push(...results.map(r => r.face_log_id))
-        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id) VALUES ? ON DUPLICATE KEY UPDATE face_log_id=face_log_id;`
-        const params = [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID])]
+        const now = formatDateTime(new Date())
+        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id, created_at) VALUES ? ON DUPLICATE KEY UPDATE face_log_id=face_log_id;`
+        const params = [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID, now])]
         if (faceLogIds.length === 0) {
           return Promise.reject('no data to process.')
         }
@@ -474,11 +475,12 @@ FOR UPDATE`
           .then(peopleLocation => {
             // process remaining data
             const sqlInsertLocationData = `
-              INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
+              INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, created_at, \`worker_created_at\`)
               VALUES ?
               ON DUPLICATE KEY UPDATE person_id=person_id, zone_id=zone_id, is_known=is_known, \`from\`=\`from\`;
             `
             const data = []
+            const now = formatDateTime(new Date())
             peopleLocation.forEach(locations => {
               if (locations.length > 1) {
                 for (let i = 1; i < locations.length; i++) {
@@ -489,6 +491,7 @@ FOR UPDATE`
                     locations[i].is_known,
                     formatDateTime(locations[i].from),
                     formatDateTime(locations[i].to),
+                    now,
                     WORKER_ID
                   ])
                 }
