@@ -133,7 +133,6 @@ export default {
           newZone[key] = newZone.config[key]
         })
         delete newZone.config
-        console.debug(newZone)
         this.currentZone = newZone
       }
       this.error = null

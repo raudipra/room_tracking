@@ -1,7 +1,7 @@
 <template>
   <v-app>
     <v-content>
-      <v-container fluid fill-height>
+      <v-container fluid>
         <v-row>
           <v-col xs="12" sm="6" md="4">
             <v-autocomplete

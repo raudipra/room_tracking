@@ -17,7 +17,7 @@
             <v-tab-item v-for="group in zoneGroups" :key="group.id">
               <v-row class="mb-6">
                 <v-col class="text-center">
-                  <v-img :src="group.layout" v-if="group.layout !== null" contain/>
+                  <img :src="BASE_URL + group.layout" v-if="group.layout !== null"/>
                   <img src="https://via.placeholder.com/728x90?Text=placeholder" v-else/>
                 </v-col>
               </v-row>
@@ -62,6 +62,7 @@ export default {
 
   data () {
     return {
+      BASE_URL: api.BASE_URL,
       zoneGroups: [],
       activeZoneGroup: null,
       activeZone: null,

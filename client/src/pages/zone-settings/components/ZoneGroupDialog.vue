@@ -33,12 +33,6 @@
             <v-row v-if="isEdit">
               <v-col cols="12">
                 <v-switch v-model="replaceLayout" label="Replace Layout Image" :disabled="isLoading"/>
-                <v-tooltip bottom>
-                <template v-slot:activator="{ on }">
-                  <v-icon small @click="openLayoutImage(item.layout)" v-on="on" :disabled="isLoading">mdi-image</v-icon>
-                </template>
-                <span>View Layout</span>
-              </v-tooltip>
               </v-col>
             </v-row>
             <v-row>

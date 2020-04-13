@@ -1,7 +1,7 @@
 <template>
   <v-app>
     <v-content>
-      <v-container fill-height fluid>
+      <v-container fluid>
         <v-row>
           <v-col xs="12" sm="6" md="4">
             <v-autocomplete
@@ -89,6 +89,7 @@ export default {
       zone: null,
       zoneQuery: null,
       isZonesLoading: false,
+      error: null,
 
       isLoading: false,
 
@@ -102,6 +103,10 @@ export default {
             ticks: {
               beginAtZero: true
             }
+          }],
+          xAxes: [{
+            display: true,
+            labelString: 'Hour'
           }]
         }
       }
@@ -159,7 +164,7 @@ export default {
         })
         .catch(err => {
           vm.isZonesLoading = false
-          console.error(err)
+          vm.error = err.message || err
         })
     },
 
@@ -180,7 +185,7 @@ export default {
         })
         .catch(err => {
           vm.isLoading = false
-          console.error(err)
+          vm.error = err.message || err
         })
     }
   }

@@ -318,16 +318,16 @@ function dismissAlert (alertId) {
   const sql = `
     UPDATE zone_alerts
     SET is_dismissed = 1
-    WHERE id = ?
-    RETURNING id, type, details, created_at, updated_at, person_id, is_known, is_dismissed
+    WHERE id = ?;
+    SELECT * FROM zone_alerts WHERE id = ?
   `
-  return Promise.using(db.getConnection(), conn => conn.query(sql, [alertId])
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [alertId, alertId])
     .then(([results]) => {
-      const alert = results[0]
+      const alert = results[1][0]
       return {
         id: alert.id,
         type: alert.type,
-        details: JSON.parse(alert.details),
+        details: alert.details,
         created_at: alert.created_at.toISOString(),
         updated_at: alert.updated_at.toISOString(),
         person_id: alert.person_id,

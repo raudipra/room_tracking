@@ -181,13 +181,13 @@ router.get('/alerts', (req, res, next) => {
     .catch(next)
 })
 
-router.patch('/alerts/:alertId', (req, res, next) => {
+router.post('/alerts/:alertId', (req, res, next) => {
   // TODO check csrf
   const alertId = req.params.alertId || null
   if (_.isUndefined(alertId) || _.isNull(alertId)) {
     res.status(400).json({
       errors: {
-        alertId: 'aletId param is required!'
+        alertId: 'alertId param is required!'
       }
     })
     return
