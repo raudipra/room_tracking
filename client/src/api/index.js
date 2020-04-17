@@ -39,11 +39,90 @@ function getPeopleForZone (zoneId) {
 }
 
 function getAlertsForZone (zoneId, isDismissed = false) {
-  return axios.get(`${BASE_URL}/zones/alerts?zone_ids=${zoneId}`).then(response => response.data)
+  return axios.get(`${BASE_URL}/zones/alerts?zone_ids=${zoneId}`)
+    .then(response => response.data)
 }
 
 function dismissAlert (alertId) {
-  return axios.post(`${BASE_URL}/zones/alerts/${alertId}`, { is_dismissed: true }).then(response => response.data)
+  return axios.post(`${BASE_URL}/zones/alerts/${alertId}`, { is_dismissed: true })
+    .then(response => response.data)
+}
+
+function createZone (zone) {
+  // reconstruct
+  const data = {
+    id: zone.id,
+    name: zone.name,
+    description: zone.description,
+    config: {
+      is_active: zone.is_active,
+      overstay_limit: zone.overstay_limit
+    },
+    zone_group: zone.zone_group_id
+  }
+
+  return axios.post(`${BASE_URL}/zones`, data)
+    .then(response => response.data)
+    .then(data => {
+      data.zone_group_id = data.zone_group.id
+      delete data.zone_group
+      return data
+    })
+}
+
+function editZone (id, zone) {
+  // reconstruct
+  const data = {
+    id: zone.id,
+    name: zone.name,
+    description: zone.description,
+    config: {
+      is_active: zone.is_active,
+      overstay_limit: zone.overstay_limit
+    },
+    zone_group: zone.zone_group_id
+  }
+
+  return axios.patch(`${BASE_URL}/zones/${id}`, data)
+    .then(response => response.data)
+    .then(data => {
+      data.zone_group_id = data.zone_group.id
+      delete data.zone_group
+      return data
+    })
+}
+
+function createZoneGroup (zoneGroup) {
+  return axios.post(`${BASE_URL}/zones/groups`, zoneGroup, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+    .then(response => response.data)
+}
+
+function editZoneGroup (id, zoneGroup) {
+  return axios.patch(`${BASE_URL}/zones/groups/${id}`, zoneGroup, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  })
+    .then(response => response.data)
+}
+
+function getAllZones () {
+  return axios.get(`${BASE_URL}/zones/?all=true`)
+    .then(response => response.data)
+}
+
+function handleApiError (err) {
+  if (err.response) {
+    return err.response.data
+  } else if (err.request) {
+    return 'Error while processing request!'
+  } else {
+    return err.message ? err.message : 'UNKNOWN'
+  }
 }
 
 function getAlertLabel (alert) {
@@ -62,11 +141,18 @@ function getAlertLabel (alert) {
 export { ALERT_TYPES, getAlertLabel }
 export default {
   getZones,
+  getAllZones,
   getZonesByName,
   getPeopleForZone,
   getAlertsForZone,
   dismissAlert,
   getPeopleWihtinDateTimeRange,
   getPeopleWihtinDate,
-  getPeopleCountHourlyInZone
+  getPeopleCountHourlyInZone,
+  createZone,
+  editZone,
+  createZoneGroup,
+  editZoneGroup,
+  handleApiError,
+  BASE_URL
 }

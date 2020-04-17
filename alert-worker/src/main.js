@@ -1,7 +1,11 @@
 const mysql = require('mysql2/promise')
 const _ = require('lodash')
 const Promise = require('bluebird')
+
 require('dotenv').config()
+
+const db = require('./db')
+const arrayToUnion = db.arrayToUnion
 
 const { DateTime, Duration, Settings } = require('luxon')
 Settings.defaultZoneName = process.env.TIMEZONE || 'Asia/Jakarta'
@@ -12,30 +16,6 @@ const ALERT_TYPES = {
   UNKNOWN: 'U',
   UNAUTHORIZED: 'A',
   OVERSTAY: 'O'
-}
-const conn = mysql.createConnection({
-  host: process.env.DB_HOST,
-  port: process.env.DB_PORT || 3306,
-  database: process.env.DB_NAME,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  multipleStatements: true,
-  Promise: Promise
-})
-
-// converts a non-object array to its respective values
-function arrayToUnion (arr, label) {
-  if (_.isEmpty(arr)) {
-    console.warn('array is empty!')
-    return ''
-  }
-
-  let result = ''
-  result += mysql.format(`SELECT ? as '${label}'`, [arr[0]])
-  for (let i = 1; i < arr.length; i++) {
-    result += mysql.format(' UNION ALL SELECT ?', [arr[i]])
-  }
-  return result
 }
 
 /**
@@ -134,7 +114,8 @@ function generateUpdateLocationQueries (existingLocationResults, peopleLocation,
   `
   const sqlInsertInitialLocation = `
     INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
-    VALUES (?, ?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?);
+    VALUES (?, ?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?)
+    ON DUPLICATE KEY UPDATE person_id=person_id, is_known=is_known, zone_id=zone_id, \`from\`=\`from\`;
   `
 
   let queries = ''
@@ -233,7 +214,7 @@ const sqlInsertAlert = `
   INSERT INTO zone_alerts (id, zone_id, type, details, person_id, is_known, worker_id)
   VALUES (uuid(), ?, ?, ?, ?, ?, ?);
 `
-function generateAlerts (results) {
+function generateAlerts (results, conn) {
   const now = DateTime.local()
   // since some alert requires 'backoff',
   const alertQueryPromises = []
@@ -303,12 +284,12 @@ function generateAlerts (results) {
         }
       }
     }, {}))
-    .then(results => conn.then(c => c.query(results.queries).then(() => results.alertCounts)))
+    .then(results => conn.query(results.queries).then(() => results.alertCounts))
 }
 
 // do a quick check if similar alert in the room has been triggered ALERT_UNKNOWN_ ago.
 // if not, raise the alert again.
-function generateAlert(timestamp, personDetails, alertType) {
+function generateAlert (timestamp, personDetails, alertType) {
   const DEFAULT_BACKOFF = 10
   let backoffParam
   switch (alertType) {
@@ -343,134 +324,115 @@ function generateAlert(timestamp, personDetails, alertType) {
     )
   `
 
-  return conn.then(c =>
-    c.query(sqlCheckExistingAlert, [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp])
-      .then(result => {
-        const hasExistingAlert = Number.parseInt(result) === 1
-        const details = JSON.stringify({ // TODO define for each alert type.
-          from: personDetails.from
-        })
-        return hasExistingAlert ? {
-          alertType: null,
-          query: ''
-        } : {
-          alertType,
-          query: mysql.format(sqlInsertAlert, [
-            personDetails.zone_id, alertType, details, personDetails.person_id, personDetails.is_known, WORKER_ID
-          ])
-        }
-      })
-  )
+  return Promise.using(db.getConnection(), conn => conn.query(sqlCheckExistingAlert,
+    [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp]
+  ).then(result => {
+    const hasExistingAlert = Number.parseInt(result) === 1
+    const details = JSON.stringify({ // TODO define for each alert type.
+      from: personDetails.from
+    })
+    return hasExistingAlert ? {
+      alertType: null,
+      query: ''
+    } : {
+      alertType,
+      query: mysql.format(sqlInsertAlert, [
+        personDetails.zone_id, alertType, details, personDetails.person_id, personDetails.is_known, WORKER_ID
+      ])
+    }
+  }))
 }
 
 function cancelFirstTransaction (faceLogIds) {
-  if (!firstTransactionCompleted) return
-
   console.info('Rolling back first transaction')
   // execute rollback
   const sqlRollbackFirstTransaction = `
     DELETE FROM face_logs_processed
     WHERE face_log_id IN (?);
   `
-  conn.then(conn => conn.query(sqlRollbackFirstTransaction, [faceLogIds]))
-    .catch(err => {
-      throw err
-    })
+
+  return db.withTransaction(tx => tx.query(sqlRollbackFirstTransaction, [faceLogIds]))
 }
 
-let firstTransactionCompleted = false
 const JOB_STATE_PROCESSING = 'P'
 const JOB_STATE_DONE = 'D'
 function main () {
   const startTime = new Date()
   const faceLogIds = []
+  let firstTransactionCompleted = false
 
-  conn.then(conn => {
-    // first transaction: get job, mark as PROCESSING
-    const firstTransaction = conn.beginTransaction()
-      .then(() => {
-        console.debug('Getting face logs data')
-        const sql = `
-        SELECT
-          fl.id AS face_log_id,
-          z.id AS zone_id,
-          TIMESTAMP(fl.creation_time) AS creation_time,
-          (fl.unknown_person_id IS NULL) AS is_known,
-          (CASE WHEN fl.unknown_person_id IS NOT NULL THEN fl.unknown_person_id
-          ELSE fl.person
-          END) AS person_id
-        FROM face_logs fl
-        LEFT JOIN face_logs_processed flp ON fl.id = flp.face_log_id
-        JOIN cameras c ON fl.camera_name = c.name
-        JOIN zones z ON z.name = c.zone_name
-        WHERE flp.state IS NULL OR (flp.worker_id = ? AND flp.state = ?)
-        ORDER BY creation_time
-        LIMIT ?
-        FOR UPDATE;
-        `
-        return conn.query(sql, [WORKER_ID, JOB_STATE_PROCESSING, Number.parseInt(process.env.CHUNK_SIZE || 5000)])
-      })
+  return db.withTransaction(conn => {
+    // first transaction: get face logs to process.
+    console.debug('Getting face logs data')
+    const sql = `
+    SELECT
+      fl.id AS face_log_id,
+      z.id AS zone_id,
+      TIMESTAMP(fl.creation_time) AS creation_time,
+      (fl.unknown_person_id IS NULL) AS is_known,
+      (CASE WHEN fl.unknown_person_id IS NOT NULL THEN fl.unknown_person_id
+      ELSE fl.person
+      END) AS person_id
+    FROM face_logs fl
+    LEFT JOIN face_logs_processed flp ON fl.id = flp.face_log_id
+    JOIN cameras c ON fl.camera_name = c.name
+    JOIN zones z ON z.name = c.zone_name
+    WHERE flp.state IS NULL OR (flp.worker_id = ? AND flp.state = ?)
+    ORDER BY creation_time
+    LIMIT ?
+    FOR UPDATE;
+    `
+    return conn.query(sql, [WORKER_ID, JOB_STATE_PROCESSING, Number.parseInt(process.env.CHUNK_SIZE || 5000)])
       .then(([results]) => {
         // collect data, mark face_logs_id as processing
         faceLogIds.push(...results.map(r => r.face_log_id))
-        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id) VALUES ? ON DUPLICATE KEY UPDATE face_log_id=face_log_id;`
+        const now = formatDateTime(new Date())
+        const sql2 = `INSERT INTO face_logs_processed (face_log_id, state, worker_id, created_at) VALUES ? ON DUPLICATE KEY UPDATE face_log_id=face_log_id;`
+        const params = [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID, now])]
+        if (faceLogIds.length === 0) {
+          return Promise.reject('no data to process.')
+        }
 
-        return conn.query(sql2, [results.map(r => [r.face_log_id, JOB_STATE_PROCESSING, WORKER_ID])])
-          .then(() => conn.commit())
-          .then(() => {
-            console.debug('first transaction done.')
-            firstTransactionCompleted = true
-            return results
-          })
-          .catch(err => {
-            throw err
-          })
+        return conn.query(sql2, params).then(() => results)
       })
-      .catch(err => {
-        console.error(err)
-        cancelFirstTransaction(faceLogIds)
-        throw err
+  })
+    .then(results => {
+      console.debug('first transaction done.')
+      firstTransactionCompleted = true
+      return results
+    })
+    .then(rows => {
+      console.debug('collecting people data')
+      peopleLocation = collectPeopleData(rows)
+      const knownPeopleIds = []
+      const unknownPeopleIds = []
+      Array.from(peopleLocation.keys()).forEach(personId => {
+        if (!personId.includes('U-')) {
+          knownPeopleIds.push(personId)
+        } else {
+          unknownPeopleIds.push(personId.substring(2))
+        }
       })
-
-    // second transaction: get location of each person and update, generate alert, mark job as done.
-    let peopleLocation
-    const secondTransaction = firstTransaction
-      .then(rows => {
-        console.debug('collecting people data')
-        peopleLocation = collectPeopleData(rows)
-        const knownPeopleIds = []
-        const unknownPeopleIds = []
-        Array.from(peopleLocation.keys()).forEach(personId => {
-          if (!personId.includes('U-')) {
-            knownPeopleIds.push(personId)
-          } else {
-            unknownPeopleIds.push(personId.substring(2))
-          }
-        })
+      return {
+        peopleLocation,
+        knownPeopleIds,
+        unknownPeopleIds
+      }
+    })
+    .then(({ peopleLocation, knownPeopleIds, unknownPeopleIds }) => {
+      // second transaction: get location of each person and update, generate alert, mark job as done.
+      return db.withTransaction(conn => {
         console.debug('Starting second transaction')
-        return conn.beginTransaction()
-          .then(() => ({
-            peopleLocation,
-            knownPeopleIds,
-            unknownPeopleIds
-          }))
-      })
-      .then(({ peopleLocation, knownPeopleIds, unknownPeopleIds }) => {
-        // get latest location of known people
-        // this assumes that all NULL values indicates that the person is still within that region.
-
         const sqlLockPeople = `
-          SELECT persons.id, zp.from, zp.zone_id
-          FROM persons
-          LEFT JOIN zone_persons zp ON
-            zp.person_id = persons.id AND
-            zp.is_known = true AND
-            zp.\`to\` IS NULL
-          WHERE persons.id IN (?)
-          FOR UPDATE
-        `
+SELECT persons.id, zp.from, zp.zone_id
+FROM persons
+LEFT JOIN zone_persons zp ON
+  zp.person_id = persons.id AND
+  zp.is_known = true AND
+  zp.to IS NULL
+WHERE persons.id IN (?)
+FOR UPDATE`
         console.debug('Locking known people locations')
-
         // set current locations of known people, using data on first row.
         return conn.query(sqlLockPeople, [knownPeopleIds])
           .then(results => {
@@ -479,128 +441,138 @@ function main () {
               return { peopleLocation, unknownPeopleIds }
             }
 
-            return conn.query(queries)
-              .then(() => ({ peopleLocation, unknownPeopleIds }))
+            return conn.query(queries).then(() => ({ peopleLocation, unknownPeopleIds }))
           })
-          .catch(err => {
-            throw err
+          .then(({ peopleLocation, unknownPeopleIds }) => {
+            const sqlLockUnknownPeopleLocation = `
+              SELECT
+                p.id,
+                zp.zone_id,
+                zp.person_id,
+                zp.\`from\`
+              FROM (
+                ${arrayToUnion(unknownPeopleIds.map(id => Number.parseInt(id)), 'id')}
+              ) p
+              LEFT JOIN zone_persons zp
+                ON zp.person_id = p.id
+                AND is_known IS FALSE
+                AND \`to\` IS NULL
+              FOR UPDATE
+            `
+            console.info('Locking unknown people locations')
+            return conn.query(sqlLockUnknownPeopleLocation)
+              .then(results => {
+                // update initial locations
+                let queries = generateUpdateLocationQueries(results[0], peopleLocation, false)
+                if (_.isEmpty(queries)) {
+                  return
+                }
+
+                return conn.query(queries)
+              })
+              .then(() => peopleLocation)
           })
-      })
-      .then(({ peopleLocation, unknownPeopleIds }) => {
-        const sqlLockUnknownPeopleLocation = `
-          SELECT
-            p.id,
-            zp.zone_id,
-            zp.person_id,
-            zp.\`from\`
-          FROM (
-            ${arrayToUnion(unknownPeopleIds.map(id => Number.parseInt(id)), 'id')}
-          ) p
-          LEFT JOIN zone_persons zp
-            ON zp.person_id = p.id
-            AND is_known IS FALSE
-            AND \`to\` IS NULL
-          FOR UPDATE
-        `
-        console.info('Locking unknown people locations')
-        const query = conn.query(sqlLockUnknownPeopleLocation)
-          .then(results => {
-            // update initial locations
-            let queries = generateUpdateLocationQueries(results[0], peopleLocation, false)
-            if (_.isEmpty(queries)) {
-              return peopleLocation
+          .then(peopleLocation => {
+            // process remaining data
+            const sqlInsertLocationData = `
+              INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, created_at, \`worker_created_at\`)
+              VALUES ?
+              ON DUPLICATE KEY UPDATE person_id=person_id, zone_id=zone_id, is_known=is_known, \`from\`=\`from\`;
+            `
+            const data = []
+            const now = formatDateTime(new Date())
+            peopleLocation.forEach(locations => {
+              if (locations.length > 1) {
+                for (let i = 1; i < locations.length; i++) {
+                  // person_id, is_known, from, to, worker_id
+                  data.push([
+                    locations[i].person_id,
+                    locations[i].zone_id,
+                    locations[i].is_known,
+                    formatDateTime(locations[i].from),
+                    formatDateTime(locations[i].to),
+                    now,
+                    WORKER_ID
+                  ])
+                }
+              }
+            })
+
+            if (data.length > 0) {
+              return conn.query(sqlInsertLocationData, [data])
             }
-
-            return conn.query(queries)
           })
-          .catch(err => {
-            throw err
-          })
-
-        return query.then(() => peopleLocation)
-      })
-      .then(peopleLocation => {
-        // process remaining data
-        const sqlInsertLocationData = `
-          INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
-          VALUES ?;
-        `
-        const data = []
-        peopleLocation.forEach(locations => {
-          if (locations.length > 1) {
-            for (let i = 1; i < locations.length; i++) {
-              // person_id, is_known, from, to, worker_id
-              data.push([
-                locations[i].person_id,
-                locations[i].zone_id,
-                locations[i].is_known,
-                formatDateTime(locations[i].from),
-                formatDateTime(locations[i].to),
-                WORKER_ID
-              ])
-            }
-          }
-        })
-
-        if (data.length > 0) {
-          return conn.query(sqlInsertLocationData, [data])
-        }
-      })
-      .then(() => {
-        // get latest locations of people based on the worker
-        const sqlGetPeopleLocation = `
-          SELECT
-            zones.id AS zone_id,
-            zp.person_id,
-            is_known,
-            \`from\`,
-            \`to\`,
-            zones.config AS config
-          FROM zone_persons zp
-          JOIN zones ON zp.zone_id = zones.id
-          WHERE (worker_created_at = ? OR worker_created_at = ?)
-            AND \`to\` IS NULL
-        `
-        return conn.query(sqlGetPeopleLocation, [WORKER_ID, WORKER_ID])
-      })
-      .then(([results]) => generateAlerts(results))
-      .then(alertDetails => {
-        console.info('Job finished. Marking as done...')
-        // mark jobs as done.
-        const sqlUpdateJobDone = `
-          UPDATE face_logs_processed
-          SET state = ?
-          WHERE face_log_id IN (?)
-            AND worker_id = ?;
-        `
-        return conn.query(sqlUpdateJobDone, [JOB_STATE_DONE, faceLogIds, WORKER_ID])
-          .then(() => conn.commit())
           .then(() => {
-            // finished. print report
-            const now = new Date()
-            const secondsElapsed = (now.getTime() - startTime.getTime()) / 1000
-            const totalAlertCount = Object.values(alertDetails).reduce((prev, curr) => prev + curr, 0)
-            console.info(`
+            // get latest locations of people based on the worker
+            const sqlGetPeopleLocation = `
+              SELECT
+                zones.id AS zone_id,
+                zp.person_id,
+                is_known,
+                \`from\`,
+                \`to\`,
+                zones.config AS config
+              FROM zone_persons zp
+              JOIN zones ON zp.zone_id = zones.id
+              WHERE (worker_created_at = ? OR worker_created_at = ?)
+                AND \`to\` IS NULL
+            `
+            return conn.query(sqlGetPeopleLocation, [WORKER_ID, WORKER_ID])
+          })
+          .then(([results]) => generateAlerts(results, conn))
+          .then(alertDetails => {
+            console.info('Job finished. Marking as done...')
+            // mark jobs as done.
+            const sqlUpdateJobDone = `
+              UPDATE face_logs_processed
+              SET state = ?
+              WHERE face_log_id IN (?)
+                AND worker_id = ?;
+            `
+            return conn.query(sqlUpdateJobDone, [JOB_STATE_DONE, faceLogIds, WORKER_ID])
+              .then(() => alertDetails)
+          })
+      })
+    })
+    .then(alertDetails => {
+      // finished. print report
+      const now = new Date()
+      const secondsElapsed = (now.getTime() - startTime.getTime()) / 1000
+      const totalAlertCount = Object.values(alertDetails).reduce((prev, curr) => prev + curr, 0)
+      console.info(`
 Job finished at [${now.toISOString()}].
-  Time Elapsed: ${secondsElapsed} s.
-  Alerts generated: ${totalAlertCount}.
-    - Unknown: ${alertDetails.unknownPerson}
-    - Unauthorized: ${alertDetails.unauthorized}
-    - Overstay: ${alertDetails.overstay}`
-          )
+Time Elapsed: ${secondsElapsed} s.
+Alerts generated: ${totalAlertCount}.
+- Unknown: ${alertDetails.unknownPerson}
+- Unauthorized: ${alertDetails.unauthorized}
+- Overstay: ${alertDetails.overstay}`
+      )
+    })
+    .catch(err => {
+      if (firstTransactionCompleted) {
+        cancelFirstTransaction(faceLogIds)
+          .catch(e => {
+            err.stack += `
+In addition. The following error is caught when trying to rollback first transaction:
+${e.stack.split('\n').slice(0,2).join('\n')}
+`
           })
-          .catch(err => {
-            throw err
-          })
-      })
-      .catch(err => {
-        console.error(err)
-        conn.rollback()
-          .then(() => cancelFirstTransaction(faceLogIds))
-        throw err
-      })
-    return secondTransaction
-  })
+      }
+      console.error(err)
+    })
 }
 
-main()
+let isRunning = false
+const RUN_AT_MOST_EVERY_MS = 10 * 1000 // run every 10 seconds
+isRunning = true
+main().finally(() => {
+  isRunning = false
+})
+
+setInterval(() => {
+  if (isRunning) return
+  isRunning = true
+  main().finally(() => {
+    isRunning = false
+  })
+}, RUN_AT_MOST_EVERY_MS)

@@ -5,7 +5,7 @@ CREATE TABLE `zone_groups` (
     `description` VARCHAR(255) NOT NULL DEFAULT '',
     `layout_src` TEXT NULL,
     `config` JSON NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_at` TIMESTAMP NOT NULL,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
@@ -15,7 +15,7 @@ CREATE TABLE `zones` (
     `name` VARCHAR(255) NOT NULL,
     `description` VARCHAR(255) NOT NULL DEFAULT '',
     `config` JSON NOT NULL,
-    `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `created_at` TIMESTAMP NOT NULL,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `zone_group_id` INT NOT NULL,
     FOREIGN KEY (`zone_group_id`) REFERENCES `zone_groups` (`id`)

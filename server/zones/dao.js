@@ -1,7 +1,7 @@
 const _ = require('lodash')
+const Promise = require('bluebird')
 
 const db = require('../config/db')
-const pool = db.pool
 const blobToJpegBase64 = db.blobToJpegBase64
 
 const NotFoundError = require('../utils/errors').NotFoundError
@@ -32,14 +32,13 @@ function getZones (zoneName) {
   ORDER BY group_id, zone_id
   `
   const query = _.isString(zoneName) ? `%${zoneName.toLowerCase()}%` : '%%'
-  return pool.getConnection()
-    .then(c => c.query(sql, [query]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [query])
     .then(([rows]) => rows.map(row => ({
       id: row.zone_id,
       name: row.zone_name,
       group_id: row.group_id,
       group_name: row.group_name
-    })))
+    }))))
 }
 
 /**
@@ -68,7 +67,7 @@ function getZones (zoneName) {
  * Get groups of zones, including the number of persons currently inside each zone.
  * @returns {Promise<Array<ZoneGroupWithZones>>}
  */
-function getZoneGroups () {
+function getZoneGroupsWithPeopleCount () {
   const sql = `
 SELECT
   zg.id AS group_id,
@@ -110,8 +109,7 @@ JOIN (
 ) zaf ON z1.id = zaf.id
 ORDER BY group_id, zone_id, alert_type
   `
-  return pool.getConnection()
-    .then(c => c.query(sql))
+  return Promise.using(db.getConnection(), conn => conn.query(sql)
     .then(([rows]) => {
       const data = rows.reduce((prev, current) => {
         const data = prev || {}
@@ -147,7 +145,60 @@ ORDER BY group_id, zone_id, alert_type
     .catch(err => {
       console.error(err)
       throw err
-    })
+    }))
+}
+
+function getZoneGroupsWithZone (zoneId = null) {
+  const sql = `
+SELECT
+  zg.id AS group_id,
+  zg.name AS group_name,
+  zg.description AS group_description,
+  zg.layout_src AS group_layout,
+  zg.config AS group_config,
+  zg.created_at AS group_created_at,
+  zg.updated_at AS group_updated_at,
+  z.id AS zone_id,
+  z.name AS zone_name,
+  z.description AS zone_description,
+  z.config AS zone_config,
+  z.created_at AS zone_created_at,
+  z.updated_at AS zone_updated_at
+FROM zone_groups zg
+JOIN zones z ON z.zone_group_id = zg.id
+${zoneId ? 'WHERE zg.id=?' : ''}
+ORDER BY group_id, zone_id
+  `
+  return Promise.using(db.getConnection(), conn => (zoneId ? conn.query(sql, [zoneId]) : conn.query(sql))
+    .then(([rows]) => {
+      const data = rows.reduce((prev, current) => {
+        const data = prev || {}
+        if (!_.has(data, current.group_id)) {
+          data[current.group_id] = {
+            id: current.group_id,
+            name: current.group_name,
+            description: current.group_description,
+            layout: current.group_layout,
+            config: current.group_config,
+            created_at: current.group_created_at,
+            updated_at: current.group_updated_at,
+            zones: []
+          }
+        }
+
+        data[current.group_id].zones.push({
+          id: current.zone_id,
+          name: current.zone_name,
+          description: current.zone_description,
+          config: current.zone_config,
+          created_at: current.zone_created_at,
+          updated_at: current.zone_updated_at
+        })
+        return data
+      }, {})
+
+      return Object.values(data)
+    }))
 }
 
 function getZoneGroup (zoneGroupId, conn) {
@@ -199,8 +250,7 @@ function getAlerts (zoneIds, isDismissed = null) {
     args.push(isDismissed ? 1 : 0)
   }
 
-  return pool.getConnection()
-    .then(c => c.query(sql, args))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, args)
     .then(([rows]) => {
       const data = {}
       rows.forEach(row => {
@@ -230,7 +280,7 @@ function getAlerts (zoneIds, isDismissed = null) {
         }
       })
       return data
-    })
+    }))
 }
 
 function getPeopleInZones (zoneIds) {
@@ -247,8 +297,7 @@ function getPeopleInZones (zoneIds) {
       AND zp.zone_id IN (?)
     ORDER BY zp.from
   `
-  return pool.getConnection()
-    .then(c => c.query(sql, [zoneIds]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [zoneIds])
     .then(([rows]) => rows.map(row => {
       return {
         id: row.id,
@@ -262,31 +311,30 @@ function getPeopleInZones (zoneIds) {
     .catch(err => {
       console.error(err)
       throw err
-    })
+    }))
 }
 
 function dismissAlert (alertId) {
   const sql = `
     UPDATE zone_alerts
     SET is_dismissed = 1
-    WHERE id = ?
-    RETURNING id, type, details, created_at, updated_at, person_id, is_known, is_dismissed
+    WHERE id = ?;
+    SELECT * FROM zone_alerts WHERE id = ?
   `
-  return pool.getConnection()
-    .then(c => c.query(sql, [alertId]))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, [alertId, alertId])
     .then(([results]) => {
-      const alert = results[0]
+      const alert = results[1][0]
       return {
         id: alert.id,
         type: alert.type,
-        details: JSON.parse(alert.details),
+        details: alert.details,
         created_at: alert.created_at.toISOString(),
         updated_at: alert.updated_at.toISOString(),
         person_id: alert.person_id,
         is_known: Number.parseInt(alert.is_known) === 1,
         is_dismissed: Number.parseInt(alert.is_dismissed) === 1
       }
-    })
+    }))
 }
 
 /**
@@ -311,8 +359,7 @@ function getPeopleInZoneByDate (zoneId, date) {
   `
   const params = [zoneId, date]
 
-  return pool.getConnection()
-    .then(conn => conn.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
@@ -320,7 +367,7 @@ function getPeopleInZoneByDate (zoneId, date) {
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
       to: row.to.toISOString()
-    })))
+    }))))
 }
 
 function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
@@ -340,8 +387,7 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
   `
   const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeTo]
 
-  return pool.getConnection()
-    .then(conn => conn.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
@@ -349,7 +395,7 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
       to: _.isNull(row.to) ? null : row.to.toISOString()
-    })))
+    }))))
 }
 
 function getPeopleCountHourlyInZone (zoneId, date) {
@@ -393,12 +439,11 @@ function getPeopleCountHourlyInZone (zoneId, date) {
   const tsEnd = `${date} 23:00:00`
   const params = [zoneId, date, date, date, tsStart, tsEnd]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
       hour: row.ts_hour,
       persons_count: Number.parseInt(row.persons_count)
-    })))
+    }))))
 }
 
 function editZone (zoneId, zoneData) {
@@ -410,42 +455,39 @@ function editZone (zoneId, zoneData) {
 
   const sql = `
     UPDATE zones
-    SET name = ?, description = ?, config = ?, zone_group_id = ?
-    WHERE id = ?
-    RETURNING *
+    SET name = ?, description = ?, config = ?, zone_group_id = ?, updated_at = now()
+    WHERE id = ?;
+    SELECT * FROM zones WHERE id = ?
   `
 
   const params = [
     zoneData.name,
     zoneData.description,
-    JSON.stringify({
-      is_active: zoneData.is_active,
-      overstay_limit: zoneData.overstay_limit
-    })
+    JSON.stringify(zoneData.config)
   ]
   if (_.isUndefined(promise)) {
     params.push(zoneGroup)
     params.push(zoneId)
+    params.push(zoneId)
 
     let existingZoneGroup
-    promise = pool.getConnection()
-      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+    promise = Promise.using(db.getConnection(), conn => getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
-        return pool.getConnection().then(c => c.query(sql, params))
+        return Promise.using(db.getConnection(), conn => conn.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
+      .then(([result]) => ({ result: result[1][0], zoneGroup: existingZoneGroup })))
   } else {
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
       params.push(zoneId)
-      return pool.getConnection()
-        .then(c => c.query(sql, params))
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
+      params.push(zoneId)
+      return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+        .then(([result]) => ({ result: result[1][0], zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
-    const data = result[0]
+    const data = result
 
     data.created_at = data.created_at.toISOString()
     data.updated_at = data.updated_at.toISOString()
@@ -456,6 +498,18 @@ function editZone (zoneId, zoneData) {
   })
 }
 
+function getZone (id) {
+  const sql = 'SELECT * FROM zones WHERE id = ?'
+  const params = [id]
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+    .then(([result]) => {
+      if (result.length === 0) {
+        throw new NotFoundError('Zone', id)
+      }
+      return result[0]
+    }))
+}
+
 function createZone (zoneData) {
   let promise
   const zoneGroup = zoneData.zone_group
@@ -464,41 +518,37 @@ function createZone (zoneData) {
   }
 
   const sql = `
-    INSERT INTO zones (name, description, config, zone_group_id)
-    VALUES (?, ?, ?, ?)
-    RETURNING *
+    INSERT INTO zones (name, description, config, zone_group_id, created_at)
+    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP);
+    SELECT * FROM zones WHERE id = (SELECT LAST_INSERT_ID())
   `
   const params = [
     zoneData.name,
     zoneData.description,
-    JSON.stringify({
-      is_active: zoneData.is_active,
-      overstay_limit: zoneData.overstay_limit
-    })
+    JSON.stringify(zoneData.config)
   ]
 
   if (_.isUndefined(promise)) {
     // zoneGroup contains ID.
 
     let existingZoneGroup
-    promise = pool.getConnection()
-      .then(c => getZoneGroup(zoneGroup, c)) // check if the zone group exists
+    promise = Promise.using(db.getConnection(), conn => /* check if the zone group exists */ getZoneGroup(zoneGroup, conn)
       .then(zoneGroup => {
         existingZoneGroup = zoneGroup
-        return pool.getConnection().then(c => c.query(sql, params))
+        params.push(zoneGroup.id)
+        return Promise.using(db.getConnection(), conn => conn.query(sql, params))
       })
-      .then(([result]) => ({ result, zoneGroup: existingZoneGroup }))
+      .then(([result]) => ({ result: result[1][0], zoneGroup: existingZoneGroup })))
   } else {
     // a new zone group has been created. create a data based on this
     promise.then(newZoneGroup => {
       params.push(newZoneGroup.id)
-      return pool.getConnection()
-        .then(c => c.query(sql, params))
-        .then(([result]) => ({ result, zoneGroup: newZoneGroup }))
+      return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+        .then(([result]) => ({ result: result[1][0], zoneGroup: newZoneGroup })))
     })
   }
   return promise.then(({ result, zoneGroup }) => {
-    const data = result[0]
+    const data = result
 
     data.created_at = data.created_at.toISOString()
     data.updated_at = data.updated_at.toISOString()
@@ -512,36 +562,26 @@ function createZone (zoneData) {
 function editZoneGroup (id, zoneGroupData) {
   const sql = `
     UPDATE zone_groups
-    SET name = ?, description = ?, layout_src = ?, config = ?
+    SET name = ?, description = ?, layout_src = COALESCE(?, layout_src), config = ?
     WHERE id = ?
-    RETURNING *
   `
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
     JSON.stringify(zoneGroupData.config),
-    id
+    id, id
   ]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
-    .then(([rows]) => ({
-      id: rows[0].id,
-      name: rows[0].name,
-      description: rows[0].description,
-      created_at: rows[0].created_at.toISOString(),
-      updated_at: rows[0].updated_at.toISOString(),
-      layout: rows[0].layout_src,
-      config: rows[0].config
-    }))
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+    .then(() => getZoneGroupsWithZone(id).then(result => result[0])))
 }
 
 function createZoneGroup (zoneGroupData) {
   const sql = `
-    INSERT INTO zone_groups (name, description, layout_src, config)
-    VALUES (?, ?, ?, ?)
-    RETURNING *
+    INSERT INTO zone_groups (name, description, layout_src, config, created_at)
+    VALUES (?, ?, ?, ?, now());
+    SELECT * FROM zone_groups WHERE id = (SELECT LAST_INSERT_ID())
   `
   const params = [
     zoneGroupData.name,
@@ -550,23 +590,20 @@ function createZoneGroup (zoneGroupData) {
     JSON.stringify(zoneGroupData.config)
   ]
 
-  return pool.getConnection()
-    .then(c => c.query(sql, params))
-    .then(([rows]) => ({
-      id: rows[0].id,
-      name: rows[0].name,
-      description: rows[0].description,
-      created_at: rows[0].created_at.toISOString(),
-      updated_at: rows[0].updated_at.toISOString(),
-      layout: rows[0].layout_src,
-      config: rows[0].config
+  return Promise.using(db.getConnection(), conn => conn.query(sql, params)
+    .then(([result]) => {
+      const data = result[1][0]
+      return getZoneGroupsWithZone(data.id)
+        .then(result => result[0])
     }))
 }
 
 module.exports = {
   getZones,
-  getZoneGroups,
+  getZoneGroupsWithPeopleCount,
+  getZoneGroupsWithZone,
   createZone,
+  getZone,
   editZone,
   createZoneGroup,
   editZoneGroup,
