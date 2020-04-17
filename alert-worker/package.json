@@ -1,0 +1,24 @@
+{
+  "name": "cognixy-room-tracking-alert-worker",
+  "version": "0.1.0",
+  "description": "",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "npm run dev",
+    "dev": "node src/main.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "SEE LICENSE IN LICENSE",
+  "dependencies": {
+    "bluebird": "^3.7.2",
+    "dotenv": "^8.2.0",
+    "lodash": "^4.17.15",
+    "luxon": "^1.22.0",
+    "mysql2": "^2.1.0"
+  },
+  "devDependencies": {
+    "faker": "^4.1.0",
+    "why-is-node-running": "^2.1.2"
+  }
+}
