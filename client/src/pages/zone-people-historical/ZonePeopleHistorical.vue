@@ -3,7 +3,7 @@
     <v-content>
       <v-container fluid>
         <v-row>
-          <v-col xs="12" sm="6" md="4">
+          <v-col xs="12" sm="6" md="3">
             <v-autocomplete
               v-model="zone"
               :disabled="isLoading"
@@ -23,7 +23,7 @@
               </template>
             </v-autocomplete>
           </v-col>
-          <v-col xs="12" sm="6" md="3">
+          <v-col xs="12" sm="6" md="2">
             <v-menu
               v-model="dateMenu"
               :close-on-content-click="false"
@@ -119,7 +119,7 @@
             <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
           </v-col>
           <v-col xs="6" sm="3" md="1">
-            <v-btn color="primary" small @click="exportCsv(plainPeopleRecords)" :disabled="exportCsvEnabled">Export CSV</v-btn>
+            <v-btn color="primary" small @click="exportToCsv" :disabled="exportCsvDisabled">Export CSV</v-btn>
           </v-col>
         </v-row>
         <v-row>
@@ -128,23 +128,27 @@
               :loading="isLoading"
               :headers="headers"
               :items="peopleRecords">
-              <template v-slot:item.picture="{ item }">
-                <v-avatar size="36px">
-                  <img v-if="item.picture !== null"
-                    :src="item.picture"
-                    alt="Avatar"/>
+              <template v-slot:item.avatar="{ item }">
+                <v-avatar size="36" color="indigo">
+                  <img v-if="item.avatar !== null"
+                    :src="item.avatar"
+                    :alt="`person-${item.person_id}-${item.is_known ? item.person_name : 'UNKNOWN'}`"/>
                   <span v-else class="white--text headline">
-                    <template v-if="item.is_known">{{ item.name.match(/\b(\w)/g).join('') }}</template>
+                    <template v-if="item.is_known">{{ item.person_name.match(/\b(\w)/g).join('') }}</template>
                     <template v-else>U</template>
                   </span>
                 </v-avatar>
               </template>
+              <template v-slot:item.name="{ item }">
+                <span v-if="item.is_known">{{ item.name }}</span>
+                <span v-else class="red--text">UNKNOWN</span>
+              </template>
               <template v-slot:item.from="{ item }">
-                <span>{{ (new Date(item.from)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
+                <span>{{ item.from | formatDateTime }}</span>
               </template>
               <template v-slot:item.to="{ item }">
                 <span v-if="item.to === null">-</span>
-                <span v-else>{{ (new Date(item.to)).toLocaleString('en-US', dateTimeFormatOptions) }}</span>
+                <span v-else>{{ item.to | formatDateTime }}</span>
               </template>
             </v-data-table>
           </v-col>
@@ -159,17 +163,18 @@ import { DateTime } from 'luxon'
 
 import api from '@/api'
 import exportCsv from '@/common/mixins/export-csv'
+import dateTime from '@/common/mixins/date-time'
 
 const headers = [
-  { text: 'ID', value: 'id' },
-  { text: 'Foto', value: 'picture', sortable: false },
+  { text: 'ID', value: 'person_id' },
+  { text: 'Foto', value: 'avatar', sortable: false },
   { text: 'Nama', value: 'name' },
   { text: 'Waktu Masuk', value: 'from' },
   { text: 'Waktu Keluar', value: 'to' }
 ]
 
 export default {
-  mixins: [exportCsv],
+  mixins: [exportCsv, dateTime],
   data: () => {
     const now = DateTime.local().startOf('hour')
 
@@ -205,11 +210,8 @@ export default {
     minToHour () {
       return this.fromHour
     },
-    plainPeopleRecords () {
-      return this.peopleRecords.map(r => Object.values(r))
-    },
-    exportCsvEnabled () {
-      return !this.isLoading && this.peopleRecords.length > 0
+    exportCsvDisabled () {
+      return this.isLoading || this.peopleRecords.length === 0
     }
   },
 
@@ -253,7 +255,6 @@ export default {
     getData () {
       if (this.isLoading) return
 
-      // TODO api call
       const tsFrom = `${this.date}T${this.fromHour}`
       const tsTo = `${this.date}T${this.toHour}`
 
@@ -268,6 +269,18 @@ export default {
           vm.isLoading = false
           console.error(err)
         })
+    },
+
+    exportToCsv () {
+      const DATETIME_FORMAT_EXPORT = 'yyyy-MM-dd HH:mm:ss'
+      const data = this.peopleRecords.map(r => [
+        r.person_id,
+        r.is_known ? r.person_name : 'UNKNOWN',
+        DateTime.fromJSDate(r.from).toFormat(DATETIME_FORMAT_EXPORT),
+        r.to !== null ? DateTime.fromJSDate(r.to).toFormat(DATETIME_FORMAT_EXPORT) : 'NULL'
+      ])
+      const headers = ['id', 'name', 'from', 'to']
+      this.exportCsv(data, headers, 'zone-people.historical.csv')
     }
   }
 }

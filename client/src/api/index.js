@@ -25,7 +25,10 @@ function getPeopleCountHourlyInZone (zoneId, date) {
 
 function getPeopleWihtinDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
   return axios.get(`${BASE_URL}/zones/${zoneId}/people-within?ts_from=${dateTimeFrom}&ts_to=${dateTimeTo}`)
-    .then(response => response.data)
+    .then(response => response.data.map(r => Object.assign(r, {
+      from: new Date(r.from),
+      to: r.to ? new Date(r.to) : null
+    })))
 }
 
 function getPeopleWihtinDate (zoneId, date) {

@@ -58,7 +58,7 @@
             <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
           </v-col>
           <v-col xs="6" sm="3" md="1">
-            <v-btn color="primary" small @click="exportCsv(plainData)" :disabled="exportCsvEnabled">Export CSV</v-btn>
+            <v-btn color="primary" small @click="exportToCsv" :disabled="exportCsvDisabled">Export CSV</v-btn>
           </v-col>
         </v-row>
         <v-row>
@@ -154,8 +154,8 @@ export default {
     plainData () {
       return this.data.map(r => Object.values(r))
     },
-    exportCsvEnabled () {
-      return !this.isLoading && this.data.length > 0
+    exportCsvDisabled () {
+      return this.isLoading || this.data.length === 0
     }
   },
 
@@ -198,6 +198,12 @@ export default {
           vm.isLoading = false
           vm.error = err.message || err
         })
+    },
+
+    exportToCsv () {
+      const data = this.data.map((r, idx) => [idx < 10 ? `0${idx}` : `${idx}`, r])
+      const headers = ['hour', 'persons_count']
+      this.exportCsv(data, headers, `${this.date}_${this.zone}_zone-people-hourly-count.csv`)
     }
   }
 }
