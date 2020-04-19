@@ -118,6 +118,9 @@
           <v-col xs="6" sm="3" md="1">
             <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
           </v-col>
+          <v-col xs="6" sm="3" md="1">
+            <v-btn color="primary" small @click="exportCsv(plainPeopleRecords)" :disabled="exportCsvEnabled">Export CSV</v-btn>
+          </v-col>
         </v-row>
         <v-row>
           <v-col col="12">
@@ -155,6 +158,7 @@
 import { DateTime } from 'luxon'
 
 import api from '@/api'
+import exportCsv from '@/common/mixins/export-csv'
 
 const headers = [
   { text: 'ID', value: 'id' },
@@ -165,6 +169,7 @@ const headers = [
 ]
 
 export default {
+  mixins: [exportCsv],
   data: () => {
     const now = DateTime.local().startOf('hour')
 
@@ -199,6 +204,12 @@ export default {
     },
     minToHour () {
       return this.fromHour
+    },
+    plainPeopleRecords () {
+      return this.peopleRecords.map(r => Object.values(r))
+    },
+    exportCsvEnabled () {
+      return !this.isLoading && this.peopleRecords.length > 0
     }
   },
 
