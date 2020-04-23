@@ -1,5 +1,8 @@
 module.exports = {
-  transpileDependencies: ['vuetify'],
+  transpileDependencies: [
+    'quasar'
+  ],
+
   pages: {
     dashboard: {
       entry: 'src/pages/dashboard/index.js',
@@ -9,7 +12,7 @@ module.exports = {
     },
     zonePeopleHistorical: {
       entry: 'src/pages/zone-people-historical/index.js',
-      template: 'public/index.html',
+      template: 'public/quasar.html',
       filename: 'zone-people-historical.html',
       title: 'Historical Report'
     },
@@ -24,6 +27,13 @@ module.exports = {
       template: 'public/index.html',
       filename: 'zone-settings.html',
       title: 'Zone Settings'
+    }
+  },
+
+  pluginOptions: {
+    quasar: {
+      importStrategy: 'kebab',
+      rtlSupport: false
     }
   }
 }

@@ -37,6 +37,16 @@ function formatTime (val) {
   }
 }
 
+function formatHour (val) {
+  if (val instanceof Number) {
+    if (val < 0) {
+      return 'Invalid Hour'
+    }
+    return val < 10 ? `0${val}:00` : `${val}:00`
+  }
+  return 'Invalid Hour'
+}
+
 export default {
-  filters: { formatDate, formatDateTime, formatTime }
+  filters: { formatDate, formatDateTime, formatTime, formatHour }
 }
