@@ -357,7 +357,7 @@ function getPeopleInZoneByDate (zoneId, date) {
       AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
     ORDER BY zp.from
   `
-  const params = [zoneId, date]
+  const params = [zoneId, date, date]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
@@ -382,10 +382,10 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
-      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from <= ? AND zp.to IS NULL))
+      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
     ORDER BY zp.from
   `
-  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeTo]
+  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
@@ -409,7 +409,7 @@ function getPeopleCountHourlyInZone (zoneId, date) {
       zpf.person_id,
       zpf.is_known
     FROM
-    -- generates a series of hourly timestamp, from beginning of UNIX epoch up to 2084-01-29 15:00:00
+    -- generates a series of hourly timestamp, from beginning of UNIX epoch (1970-01-01 00:00:00) up to 2084-01-29 15:00:00
     (select TIMESTAMPADD(HOUR, t5.i*100000 + t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i, '1970-01-01 00:00:00') ts_hour from
         (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t0,
         (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t1,
@@ -427,7 +427,7 @@ function getPeopleCountHourlyInZone (zoneId, date) {
     FROM zone_persons zp
     WHERE zone_id = ?
     AND ((DATE(zp.\`from\`) >= ? AND DATE(zp.\`to\`) <= ?)
-      OR (DATE(zp.\`from\`) <= ? AND zp.\`to\` IS NULL))
+      OR (DATE(zp.\`from\`) >= ? AND zp.\`to\` IS NULL))
     ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL))
     WHERE ts_hour BETWEEN ? AND ?
     GROUP BY v.ts_hour, zpf.person_id, zpf.is_known -- count hourly as 1
