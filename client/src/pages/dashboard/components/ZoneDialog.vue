@@ -75,9 +75,36 @@ export default {
   }),
 
   watch: {
-    zone () {
-      this.refreshPeople()
-      this.refreshAlerts()
+    zone (val) {
+      if (!_.isNull(val)) {
+        switch (this.tab) {
+          case 0:
+            this.refreshPeople()
+            break
+          case 1:
+            this.refreshAlerts()
+            break
+        }
+      } else {
+        this.tab = 0
+        this.people = []
+        this.zoneAlerts = []
+      }
+    },
+
+    tab (val) {
+      if (this.dialog) {
+        this.$nextTick(() => {
+          switch (val) {
+            case 0:
+              this.refreshPeople()
+              break
+            case 1:
+              this.refreshAlerts()
+              break
+          }
+        })
+      }
     }
   },
 
@@ -144,6 +171,11 @@ export default {
             peopleCount: people.count
           })
         })
+        .catch(err => {
+          console.error(err)
+          vm.loading = false
+          vm.showAlert('error', err.message || 'UNKNOWN error')
+        })
     },
 
     showAlert (type, message) {
@@ -194,7 +226,7 @@ export default {
           vm.$nextTick(() => {
             vm.$emit('alerts-updated', {
               zone: zone.id,
-              ...vm.availableAlerts
+              alerts: vm.availableAlerts
             })
             vm.$emit('people-updated', {
               zone: zone.id,
@@ -224,9 +256,11 @@ export default {
         alert.is_known = true
         this.$set(this.zoneAlerts, index, alert)
       }
-      this.$emit('alerts-updated', {
-        zone: this.zone.id,
-        ...this.availableAlerts
+      this.$nextTick(() => {
+        this.$emit('alerts-updated', {
+          zone: this.zone.id,
+          alerts: this.availableAlerts
+        })
       })
     }
   }

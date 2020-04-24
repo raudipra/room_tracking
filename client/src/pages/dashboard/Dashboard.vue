@@ -25,9 +25,10 @@
                 <v-col
                   v-for="zone in group.zones"
                   :key="zone.id"
-                  :lg="4"
-                  :md="6"
-                  :sm="12">
+                  :lg="3"
+                  :md="4"
+                  :sm="6"
+                  :xs="12">
                   <ZoneButton
                     @click="openZoneDialog(zone)"
                     :name="zone.name"
@@ -73,6 +74,14 @@ export default {
 
   components: { ZoneButton, ZoneDialog },
 
+  watch: {
+    dialog (isOpen) {
+      if (!isOpen) {
+        this.activeZone = null
+      }
+    }
+  },
+
   methods: {
     openZoneDialog (zone) {
       this.activeZone = zone
@@ -81,9 +90,9 @@ export default {
 
     handlePeopleUpdated ({ zone, peopleCount }) {
       const vm = this
-      const activeZoneGroupIdx = this.activeZoneGroup
+      const activeZoneGroupIdx = vm.activeZoneGroup
       if (_.isUndefined(activeZoneGroupIdx) || _.isNull(activeZoneGroupIdx)) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
@@ -100,9 +109,9 @@ export default {
 
     handleAlertsUpdated ({ zone, alerts }) {
       const vm = this
-      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
-      if (activeZoneGroupIdx === -1) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+      const activeZoneGroupIdx = vm.activeZoneGroup
+      if (_.isNull(activeZoneGroupIdx) || _.isUndefined(activeZoneGroupIdx)) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]

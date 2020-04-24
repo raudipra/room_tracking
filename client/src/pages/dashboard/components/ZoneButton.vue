@@ -1,17 +1,18 @@
 <template>
   <div class="text-center">
     <v-btn
+      block
       x-large
-      class="pt-10 pb-10 pl-10 pr-10 text-center"
+      class="py-10 text-center zone-btn"
       outlined
       @click="clicked">
-      <p>
+      <p class="zone-btn">
         <span class="subtitle-1">{{ name }}</span><br/>
         <span class="title">{{ peopleCount }}</span>
       </p>
     </v-btn>
     <br/>
-    <div class="text-center">
+    <div class="text-center mt-n6 mb-4">
       <v-tooltip bottom>
         <template v-slot:activator="{ on }">
           <v-icon :class="unauthorizedClass" v-on="on">
@@ -60,6 +61,15 @@ $alerts: 'room-active' map-get($yellow, base), 'overstay' map-get($yellow, base)
       color: $default-off-state-color
     to
       color: nth($tuple, 2)
+
+// fix for chrome: negative margin needs to be applied to button.
+@media all and (-webkit-min-device-pixel-ratio:0) and (min-resolution: 0.001dpcm)
+  .zone-btn
+    margin-top: -28px
+
+@-moz-document url-prefix()
+  .zone-btn
+    margin-top: 12px !important
 </style>
 
 <script>
