@@ -2,9 +2,16 @@
   <v-app>
     <v-content>
       <v-container fill-height fluid>
+        <v-toolbar dense color="primary" dark>
+          <v-toolbar-title>Dashboard</v-toolbar-title>
+          <v-spacer/>
+          <v-btn dark icon v-if="!isLoading" @click="refreshZones">
+            <v-icon>mdi-refresh</v-icon>
+          </v-btn>
+          <v-progress-circular indeterminate v-else/>
+        </v-toolbar>
         <v-tabs
           v-model="activeZoneGroup"
-          grow
           show-arrows>
           <v-tabs-slider />
 
@@ -58,6 +65,13 @@ import api, { ALERT_TYPES } from '@/api'
 import ZoneButton from './components/ZoneButton'
 import ZoneDialog from './components/ZoneDialog'
 
+let refreshInterval
+function refreshData () {
+  if (!_.isUndefined(refreshInterval)) {
+    clearInterval(refreshInterval)
+  }
+  return api.getZones()
+}
 export default {
   name: 'Dashboard',
 
@@ -132,9 +146,10 @@ export default {
       if (this.isLoading) {
         return
       }
+
       const vm = this
       vm.isLoading = true
-      api.getZones()
+      refreshData()
         .then(zoneGroups => {
           zoneGroups.map(zoneGroup => {
             zoneGroup.zones = zoneGroup.zones.map(zone => {
@@ -164,10 +179,16 @@ export default {
         .then(zoneGroups => {
           vm.zoneGroups = zoneGroups
           vm.isLoading = false
+          setInterval(() => {
+            vm.refreshZones()
+          }, 60000)
         })
         .catch(err => {
           vm.isLoading = false
           console.error(err)
+          setInterval(() => {
+            vm.refreshZones()
+          }, 60000)
         })
     }
   },
