@@ -85,7 +85,10 @@ JOIN (
     z.id,
    SUM(CASE WHEN zp.person_id IS NULL THEN 0 ELSE 1 END) AS current_persons_count
   FROM zones z
-  LEFT JOIN zone_persons zp ON z.id = zp.zone_id AND zp.to IS NULL
+  LEFT JOIN zone_persons zp ON
+    z.id = zp.zone_id
+    AND zp.to IS NULL
+    AND DATE(zp.from) >= CURRENT_DATE
   GROUP BY z.id
 ) zp1 ON zp1.id = z1.id
 JOIN (
@@ -104,6 +107,7 @@ JOIN (
       WHERE za2.zone_id = zones.id
         AND za2.type = alert_type
         AND is_dismissed IS FALSE
+        AND DATE(za2.created_at) >= CURRENT_DATE
       LIMIT 1
     )
 ) zaf ON z1.id = zaf.id
@@ -290,16 +294,25 @@ function getPeopleInZones (zoneIds) {
       zp.is_known,
       zp.from,
       p.name,
-      p.portrait
+      p.portrait,
+      za.\`type\` AS alert_type
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.person_id = p.id AND zp.is_known = 1
+    LEFT JOIN zone_alerts za ON
+      zp.zone_id = za.zone_id
+      AND zp.person_id = za.person_id
+      AND zp.is_known = za.is_known
+      AND CONVERT_TZ(JSON_UNQUOTE(za.details->'$.from'), "+00:00", @@SESSION.time_zone) = zp.\`from\`
+      AND za.is_dismissed = 0
     WHERE zp.to IS NULL
       AND zp.zone_id IN (?)
+      AND DATE(zp.from) >= CURRENT_DATE
     ORDER BY zp.from
   `
   return Promise.using(db.getConnection(), conn => conn.query(sql, [zoneIds])
-    .then(([rows]) => rows.map(row => {
-      return {
+    .then(([rows]) => rows.reduce((prev, row) => {
+      const personId = row.is_known === 1 ? `${row.id}` : `U-${row.id}`
+      const personDetails = prev.has(personId) ? prev.get(personId) : {
         id: row.id,
         is_known: Number.parseInt(row.is_known) === 1,
         from: row.from,
@@ -307,7 +320,17 @@ function getPeopleInZones (zoneIds) {
         avatar: !_.isNull(row.portrait) ? blobToJpegBase64(row.portrait) : null,
         alerts: []
       }
-    }))
+      if (!_.isNull(row.alert_type)) {
+        if (!personDetails.alerts.includes(row.alert_type)) {
+          personDetails.alerts.push(row.alert_type)
+        }
+      }
+
+      prev.set(personId, personDetails)
+
+      return prev
+    }, new Map()))
+    .then(results => [...results.values()])
     .catch(err => {
       console.error(err)
       throw err
@@ -357,7 +380,7 @@ function getPeopleInZoneByDate (zoneId, date) {
       AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
     ORDER BY zp.from
   `
-  const params = [zoneId, date]
+  const params = [zoneId, date, date]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
@@ -382,10 +405,10 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
-      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from <= ? AND zp.to IS NULL))
+      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
     ORDER BY zp.from
   `
-  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeTo]
+  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([rows]) => rows.map(row => ({
@@ -409,7 +432,7 @@ function getPeopleCountHourlyInZone (zoneId, date) {
       zpf.person_id,
       zpf.is_known
     FROM
-    -- generates a series of hourly timestamp, from beginning of UNIX epoch up to 2084-01-29 15:00:00
+    -- generates a series of hourly timestamp, from beginning of UNIX epoch (1970-01-01 00:00:00) up to 2084-01-29 15:00:00
     (select TIMESTAMPADD(HOUR, t5.i*100000 + t4.i*10000 + t3.i*1000 + t2.i*100 + t1.i*10 + t0.i, '1970-01-01 00:00:00') ts_hour from
         (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t0,
         (select 0 i union all select 1 union all select 2 union all select 3 union all select 4 union all select 5 union all select 6 union all select 7 union all select 8 union all select 9) t1,
@@ -423,11 +446,12 @@ function getPeopleCountHourlyInZone (zoneId, date) {
       person_id,
       is_known,
       TIMESTAMP(DATE_FORMAT(zp.\`from\`, '%Y-%m-%d %H:00:00')) AS ts_from,
-      TIMESTAMP(DATE_FORMAT(zp.\`to\`, '%Y-%m-%d %H:00:00')) AS ts_to
+      MAX(TIMESTAMP(DATE_FORMAT(zp.\`to\`, '%Y-%m-%d %H:00:00'))) AS ts_to
     FROM zone_persons zp
     WHERE zone_id = ?
     AND ((DATE(zp.\`from\`) >= ? AND DATE(zp.\`to\`) <= ?)
-      OR (DATE(zp.\`from\`) <= ? AND zp.\`to\` IS NULL))
+      OR (DATE(zp.\`from\`) >= ? AND zp.\`to\` IS NULL))
+    GROUP BY person_id, is_known, ts_from
     ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL))
     WHERE ts_hour BETWEEN ? AND ?
     GROUP BY v.ts_hour, zpf.person_id, zpf.is_known -- count hourly as 1

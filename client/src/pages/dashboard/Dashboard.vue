@@ -2,9 +2,16 @@
   <v-app>
     <v-content>
       <v-container fill-height fluid>
+        <v-toolbar dense color="primary" dark>
+          <v-toolbar-title>Dashboard</v-toolbar-title>
+          <v-spacer/>
+          <v-btn dark icon v-if="!isLoading" @click="refreshZones">
+            <v-icon>mdi-refresh</v-icon>
+          </v-btn>
+          <v-progress-circular indeterminate v-else/>
+        </v-toolbar>
         <v-tabs
           v-model="activeZoneGroup"
-          grow
           show-arrows>
           <v-tabs-slider />
 
@@ -25,9 +32,10 @@
                 <v-col
                   v-for="zone in group.zones"
                   :key="zone.id"
-                  :lg="4"
-                  :md="6"
-                  :sm="12">
+                  :lg="3"
+                  :md="4"
+                  :sm="6"
+                  :xs="12">
                   <ZoneButton
                     @click="openZoneDialog(zone)"
                     :name="zone.name"
@@ -57,6 +65,13 @@ import api, { ALERT_TYPES } from '@/api'
 import ZoneButton from './components/ZoneButton'
 import ZoneDialog from './components/ZoneDialog'
 
+let refreshInterval
+function refreshData () {
+  if (!_.isUndefined(refreshInterval)) {
+    clearInterval(refreshInterval)
+  }
+  return api.getZones()
+}
 export default {
   name: 'Dashboard',
 
@@ -73,6 +88,14 @@ export default {
 
   components: { ZoneButton, ZoneDialog },
 
+  watch: {
+    dialog (isOpen) {
+      if (!isOpen) {
+        this.activeZone = null
+      }
+    }
+  },
+
   methods: {
     openZoneDialog (zone) {
       this.activeZone = zone
@@ -81,9 +104,9 @@ export default {
 
     handlePeopleUpdated ({ zone, peopleCount }) {
       const vm = this
-      const activeZoneGroupIdx = this.activeZoneGroup
+      const activeZoneGroupIdx = vm.activeZoneGroup
       if (_.isUndefined(activeZoneGroupIdx) || _.isNull(activeZoneGroupIdx)) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
@@ -100,9 +123,9 @@ export default {
 
     handleAlertsUpdated ({ zone, alerts }) {
       const vm = this
-      const activeZoneGroupIdx = this.zoneGroups.findIndex(zg => zg.id === vm.activeZoneGroup.id)
-      if (activeZoneGroupIdx === -1) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup.id || 'N/A'}!`)
+      const activeZoneGroupIdx = vm.activeZoneGroup
+      if (_.isNull(activeZoneGroupIdx) || _.isUndefined(activeZoneGroupIdx)) {
+        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
@@ -123,9 +146,10 @@ export default {
       if (this.isLoading) {
         return
       }
+
       const vm = this
       vm.isLoading = true
-      api.getZones()
+      refreshData()
         .then(zoneGroups => {
           zoneGroups.map(zoneGroup => {
             zoneGroup.zones = zoneGroup.zones.map(zone => {
@@ -155,10 +179,16 @@ export default {
         .then(zoneGroups => {
           vm.zoneGroups = zoneGroups
           vm.isLoading = false
+          setInterval(() => {
+            vm.refreshZones()
+          }, 60000)
         })
         .catch(err => {
           vm.isLoading = false
           console.error(err)
+          setInterval(() => {
+            vm.refreshZones()
+          }, 60000)
         })
     }
   },

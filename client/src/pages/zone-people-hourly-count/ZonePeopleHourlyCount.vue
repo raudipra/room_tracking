@@ -57,6 +57,9 @@
           <v-col xs="6" sm="2" md="2">
             <v-btn color="primary" small @click="getData" :disabled="isLoading">Get Data</v-btn>
           </v-col>
+          <v-col xs="6" sm="3" md="1">
+            <v-btn color="primary" small @click="exportToCsv" :disabled="exportCsvDisabled">Export CSV</v-btn>
+          </v-col>
         </v-row>
         <v-row>
           <v-col col="12">
@@ -72,9 +75,11 @@
 import { DateTime } from 'luxon'
 
 import api from '@/api'
+import exportCsv from '@/common/mixins/export-csv'
 import HourlyPeopleChart from './components/HourlyPeopleChart.vue'
 
 export default {
+  mixins: [exportCsv],
   components: { HourlyPeopleChart },
 
   data () {
@@ -145,6 +150,12 @@ export default {
           borderWidth: 1
         }]
       }
+    },
+    plainData () {
+      return this.data.map(r => Object.values(r))
+    },
+    exportCsvDisabled () {
+      return this.isLoading || this.data.length === 0
     }
   },
 
@@ -187,6 +198,12 @@ export default {
           vm.isLoading = false
           vm.error = err.message || err
         })
+    },
+
+    exportToCsv () {
+      const data = this.data.map((r, idx) => [idx < 10 ? `0${idx}` : `${idx}`, r])
+      const headers = ['hour', 'persons_count']
+      this.exportCsv(data, headers, `${this.date}_${this.zone}_zone-people-hourly-count.csv`)
     }
   }
 }

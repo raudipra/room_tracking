@@ -15,7 +15,7 @@ const pool = mysql.createPool({
 })
 
 function blobToJpegBase64 (blob) {
-  return 'data:image/jpeg;' + Buffer.from(blob).toString('base64')
+  return 'data:image/jpeg;charset=utf-8;base64,' + Buffer.from(blob).toString('base64')
 }
 
 function getConnection () {
