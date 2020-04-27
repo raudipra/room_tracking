@@ -43,7 +43,7 @@
           <div class="col">
             <q-input dense :value="formDateDisplay" label="Date" readonly>
               <template v-slot:append>
-                <q-icon name="mdi-event" class="cursor-pointer">
+                <q-icon name="mdi-calendar" class="cursor-pointer">
                   <q-popup-proxy ref="qDateProxy" transition-show="scale" transition-hide="scale">
                     <q-date
                       v-model="date"
@@ -193,7 +193,7 @@ export default {
     const now = DateTime.local().startOf('hour')
 
     return {
-      maxDate: now.toFormat('yyyy-LL-dd'),
+      maxDate: now.toFormat('yyyy/LL/dd'),
 
       wholeDay: false,
 
@@ -253,7 +253,6 @@ export default {
         })
         .catch(err => {
           this.isZonesLoading = false
-          console.error(err)
           this.showError(err.message)
         })
     },
@@ -279,7 +278,6 @@ export default {
         })
         .catch(err => {
           vm.isLoading = false
-          console.error(err)
           this.showError(err.message)
         })
     },

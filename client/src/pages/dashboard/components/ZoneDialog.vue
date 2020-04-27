@@ -172,7 +172,6 @@ export default {
           })
         })
         .catch(err => {
-          console.error(err)
           vm.loading = false
           vm.showAlert('error', err.message || 'UNKNOWN error')
         })

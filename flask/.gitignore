@@ -1,0 +1,19 @@
+# Flask-specific
+*.pyc
+__pycache__/
+venv/
+
+instance/
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+static/dist/
+dist/
+build/
+*.egg-info/
+.env
+
+# VS Code
+.vscode/
