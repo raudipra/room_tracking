@@ -389,7 +389,7 @@ function getPeopleInZoneByDate (zoneId, date) {
       person_name: row.person_name,
       avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
       from: row.from.toISOString(),
-      to: row.to.toISOString()
+      to: !_.isNull(row.to) ? row.to.toISOString() : null
     }))))
 }
 
