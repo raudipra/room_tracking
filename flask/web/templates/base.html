@@ -1,0 +1,101 @@
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>{{ title }}</title>
+
+  <!-- CSS SCRIPTS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/bootstrap.min.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/font-awesome.min.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/themify-icons.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/metisMenu.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/owl.carousel.min.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/slicknav.min.css') }}"/>
+
+  <!-- others css -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/typography.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/default-css.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/styles.css') }}"/>
+  <link rel="stylesheet" href="{{ url_for('static', filename='srtdash/assets/css/responsive.css') }}"/>
+</head>
+
+<body>
+  <div class="page-container">
+    <div class="sidebar-menu">
+      <div class="sidebar-header">
+        <div class="logo">
+          <a href="dashboard.html"><img src="{{ url_for('static', filename='icons/cognixy-logo.png') }}" alt="logo"></a>
+        </div>
+      </div>
+      <div class="main-menu">
+        <div class="menu-inner">
+          <nav>
+            <ul class="metismenu" id="menu">
+              <li>
+                <a href="{{ url_for('zones.dashboard')}}"><i class="ti-dashboard"></i><span>Dashboard</span></a>
+              </li>
+              <li>
+                <a href="{{ url_for('zones.people_historical')}}"><i class="ti-eye"></i><span>Historical by Zone</span></a>
+              </li>
+              <li>
+                <a href="{{ url_for('zones.people_hourly')}}"><i class="ti-bar-chart"></i><span>People Hourly Count</span></a>
+              </li>
+              <li>
+                <a href="{{ url_for('zones.settings')}}"><i class="ti-settings"></i><span>Zone Settings</span></a>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
+    </div>
+    <div class="main-content">
+      <div class="header-area">
+          <div class="row align-items-center">
+            <!-- nav and search button -->
+            <div class="col-md-6 col-sm-8 clearfix">
+              <div class="nav-btn pull-left">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+              </div>
+            </div>
+            <!-- profile info & task notification -->
+            <div class="col-md-6 col-sm-4 clearfix">
+              <ul class="notification-area pull-right">
+                <li id="full-view"><i class="ti-fullscreen"></i></li>
+                <li id="full-view-exit"><i class="ti-zoom-out"></i></li>
+                <li class="settings-btn">
+                  <a href="login.html"><i class="ti-power-off"></i></a>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        <!-- header area end -->
+        <!-- page title area start -->
+      <div class="main-content-inner">
+        <iframe style="display:table-row;height:100%;width:100%;" src="{{ url_for('static', filename='dist/' + path) }}"></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- JS SCRIPTS -->
+  <script src="{{ url_for('static', filename='js/lib/jquery-2.2.3.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/lib/notify.min.js') }}"></script>
+
+  <!-- bootstrap 4 js -->
+  <script src="{{ url_for('static', filename='srtdash/assets/js/popper.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/bootstrap.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/owl.carousel.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/metisMenu.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/jquery.slimscroll.min.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/jquery.slicknav.min.js') }}"></script>
+
+  <!-- others plugins -->
+  <script src="{{ url_for('static', filename='srtdash/assets/js/plugins.js') }}"></script>
+  <script src="{{ url_for('static', filename='srtdash/assets/js/scripts.js') }}"></script>
+</body>
+
+</html>

@@ -106,7 +106,6 @@ export default {
       const vm = this
       const activeZoneGroupIdx = vm.activeZoneGroup
       if (_.isUndefined(activeZoneGroupIdx) || _.isNull(activeZoneGroupIdx)) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
@@ -125,7 +124,6 @@ export default {
       const vm = this
       const activeZoneGroupIdx = vm.activeZoneGroup
       if (_.isNull(activeZoneGroupIdx) || _.isUndefined(activeZoneGroupIdx)) {
-        console.error(`Unknown active ZoneGroup id: ${vm.activeZoneGroup || 'N/A'}!`)
         return
       }
       const activeZoneGroup = vm.zoneGroups[activeZoneGroupIdx]
@@ -185,7 +183,7 @@ export default {
         })
         .catch(err => {
           vm.isLoading = false
-          console.error(err)
+          err.message = ''
           setInterval(() => {
             vm.refreshZones()
           }, 60000)
