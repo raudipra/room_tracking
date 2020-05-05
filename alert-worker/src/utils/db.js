@@ -26,7 +26,6 @@ function withTransaction (fn) {
     return tx.then(() => fn.apply(null, [conn]))
       .then(
         res => {
-          console.info('Committing transaction')
           return conn.commit().thenReturn(res)
         },
         err => conn.rollback()
