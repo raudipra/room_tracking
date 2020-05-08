@@ -153,6 +153,7 @@ ORDER BY group_id, zone_id, alert_type
 }
 
 function getZoneGroupsWithZone (zoneId = null) {
+  // Use Left Join to get Zone Group without Zone so we can add Zone
   const sql = `
 SELECT
   zg.id AS group_id,
@@ -169,7 +170,7 @@ SELECT
   z.created_at AS zone_created_at,
   z.updated_at AS zone_updated_at
 FROM zone_groups zg
-JOIN zones z ON z.zone_group_id = zg.id
+LEFT JOIN zones z ON z.zone_group_id = zg.id
 ${zoneId ? 'WHERE zg.id=?' : ''}
 ORDER BY group_id, zone_id
   `
