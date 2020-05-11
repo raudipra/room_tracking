@@ -86,7 +86,8 @@ function validateZoneGroupData (data) {
   } else if (!_.isObjectLike(data, 'config')) {
     errors.config = 'config is invalid!'
   } else {
-    const config = data.config
+    // FormData can't be read as Object. Maybe we need another way.
+    var config = JSON.parse(data.config)
     const configErrors = {}
     // validate the config
     if (!_.has(config, 'default_overstay_limit')) {
