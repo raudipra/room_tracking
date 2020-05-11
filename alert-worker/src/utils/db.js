@@ -14,8 +14,27 @@ const pool = mysql.createPool({
   Promise: Promise
 })
 
+// this is used by the alert generator to check backoff.
+const backoffPool = mysql.createPool({
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || 3306,
+  database: process.env.DB_NAME,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASS,
+  multipleStatements: true,
+  waitForConnections: true,
+  connectionLimit: 10,
+  Promise: Promise
+})
+
 function getConnection () {
   return pool.getConnection().disposer(conn => {
+    conn.release()
+  })
+}
+
+function getBackoffConnection () {
+  return backoffPool.getConnection().disposer(conn => {
     conn.release()
   })
 }
@@ -59,4 +78,4 @@ function arrayToUnion (arr, label) {
   return result
 }
 
-module.exports = { getConnection, withTransaction, arrayToUnion, pool }
+module.exports = { getConnection, getBackoffConnection, withTransaction, arrayToUnion, pool }

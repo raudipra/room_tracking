@@ -1,7 +1,6 @@
 const mysql = require('mysql2/promise')
 const EventEmitter = require('events')
 const _ = require('lodash')
-const Promise = require('bluebird')
 const { DateTime } = require('luxon')
 
 // load local files
@@ -95,8 +94,8 @@ function generateUpdateLocationQueries (existingLocationResults, peopleLocation,
     AND \`to\` IS NULL;
   `
   const sqlInsertInitialLocation = `
-    INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`)
-    VALUES (?, ?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?)
+    INSERT INTO zone_persons (\`person_id\`, \`zone_id\`, \`is_known\`, \`from\`, \`to\`, \`worker_created_at\`, \`created_at\`)
+    VALUES (?, ?, ${isKnown ? 'TRUE' : 'FALSE'}, ?, ?, ?, CURRENT_TIMESTAMP)
     ON DUPLICATE KEY UPDATE person_id=person_id, is_known=is_known, zone_id=zone_id, \`from\`=\`from\`;
   `
 
@@ -287,17 +286,24 @@ LEFT JOIN zone_persons zp ON
   zp.to IS NULL
 WHERE persons.id IN (?)
 FOR UPDATE`
-        logger.debug('Locking known people locations')
         // set current locations of known people, using data on first row.
-        return conn.query(sqlLockPeople, [knownPeopleIds])
-          .then(results => {
-            let queries = generateUpdateLocationQueries(results[0], peopleLocation, true)
-            if (queries === '') {
-              return { peopleLocation, unknownPeopleIds }
-            }
+        let promise
+        if (knownPeopleIds.length > 0) {
+          logger.debug('Locking known people locations')
+          promise = conn.query(sqlLockPeople, [knownPeopleIds])
+            .then(results => {
+              let queries = generateUpdateLocationQueries(results[0], peopleLocation, true)
+              if (queries === '') {
+                return { peopleLocation, unknownPeopleIds }
+              }
 
-            return conn.query(queries).then(() => ({ peopleLocation, unknownPeopleIds }))
-          })
+              return conn.query(queries).then(() => ({ peopleLocation, unknownPeopleIds }))
+            })
+        } else {
+          logger.info('no known person captured')
+          promise = Promise.resolve({ peopleLocation, unknownPeopleIds })
+        }
+        return promise
           .then(({ peopleLocation, unknownPeopleIds }) => {
             // if no unknown person, skip this step.
             if (unknownPeopleIds.length === 0) {
@@ -399,26 +405,27 @@ ${e.stack.split('\n').slice(0,2).join('\n')}
     })
 }
 
+let isRunning = false
+const events = new EventEmitter()
 const LocationUpdater = {
-  _instance: null,
+  events,
   run: function () {
-    if (this._instance !== null) {
-      return this._instance
+    if (isRunning) {
+      return
     }
-    this._instance = main()
-      .catch(err => {
+    isRunning = true
+    main()
+      .catch(function (err) {
         logger.error(err)
-        LocationUpdater.events.emit('error', err)
-      })
-      .finally(function () {
-        this._instance = null // cleanup running instance.
+        events.emit('error', err)
       }.bind(this))
-    return this._instance
+      .finally(function () {
+        isRunning = false // cleanup running instance.
+      }.bind(this))
   },
   isRunning: function () {
-    return this._instance !== null
-  },
-  events: new EventEmitter()
+    return isRunning
+  }
 }
 Object.freeze(LocationUpdater)
 module.exports = LocationUpdater

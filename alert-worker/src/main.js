@@ -4,8 +4,6 @@ const { Settings } = require('luxon')
 require('dotenv').config()
 Settings.defaultZoneName = process.env.TIMEZONE || 'Asia/Jakarta'
 
-const logger = require('./utils/logger')('main')
-
 const AlertGenerator = require('./alert-generator')
 const LocationUpdater = require('./location-update')
 
@@ -26,6 +24,5 @@ setInterval(() => {
     return
   }
 
-  logger.debug('Starting alert generator...')
   AlertGenerator.run()
 }, ALERT_GENERATOR_INTERVAL_MS)
