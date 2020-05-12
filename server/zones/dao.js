@@ -404,26 +404,37 @@ function dismissAlert (alertId) {
  * @param {!number|string} zoneId
  * @param {!string} date
  */
-function getPeopleInZoneByDate (zoneId, date) {
+function getPeopleInZoneByDate (zoneId, date, page = 1, limit = 10, orderBy = 'from', descending = false) {
   const sql = `
     SELECT
       zp.person_id,
       zp.is_known,
       zp.from,
       zp.to,
-      p.name AS person_name,
+      COALESCE(p.name, 'UNKNOWN') AS person_name,
       p.portrait AS person_portrait
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
       AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
-    ORDER BY zp.from
+    ORDER BY ?? ${descending ? 'DESC' : 'ASC'}
+    LIMIT ?
+    OFFSET ?;
+    SELECT COUNT(*) AS row_count
+    FROM zone_persons zp
+    WHERE zp.zone_id = ?
+      AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
   `
-  const params = [zoneId, date, date]
+  const params = [
+    zoneId, date, date, orderBy, limit, (page - 1) * limit,
+    zoneId, date, date
+  ]
 
+  let rowCount
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => {
-      return Promise.all(rows.map(row => {
+    .then(([results]) => {
+      rowCount = results[1][0].row_count
+      return Promise.all(results[0].map(row => {
         if (_.isNull(row.person_portrait)) {
           return Promise.resolve(row)
         } else {
@@ -448,28 +459,48 @@ function getPeopleInZoneByDate (zoneId, date) {
       from: row.from.toISOString(),
       to: !_.isNull(row.to) ? row.to.toISOString() : null
     }))))
+    .then(data => ({
+      data,
+      // pagination stuff
+      page: page,
+      rowsNumber: rowCount,
+      descending,
+      sortBy: orderBy,
+      rowsPerPage: limit
+    }))
 }
 
-function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
+function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo, page = 1, limit = 10, orderBy = 'from', descending = false) {
   const sql = `
     SELECT
       zp.person_id,
       zp.is_known,
       zp.from,
       zp.to,
-      p.name AS person_name,
+      COALESCE(p.name, 'UNKNOWN') AS person_name,
       p.portrait AS person_portrait
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
       AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
-    ORDER BY zp.from
+    ORDER BY ?? ${descending ? 'DESC' : 'ASC'}
+    LIMIT ?
+    OFFSET ?;
+    SELECT COUNT(*) AS row_count
+    FROM zone_persons zp
+    WHERE zp.zone_id = ?
+      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
   `
-  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom]
+  const params = [
+    zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom, orderBy, limit, (page - 1) * limit,
+    zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom
+  ]
 
+  let rowCount
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => {
-      return Promise.all(rows.map(row => {
+    .then(([results]) => {
+      rowCount = results[1][0].row_count
+      return Promise.all(results[0].map(row => {
         if (_.isNull(row.person_portrait)) {
           return Promise.resolve(row)
         } else {
@@ -494,6 +525,15 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
       from: row.from.toISOString(),
       to: _.isNull(row.to) ? null : row.to.toISOString()
     }))))
+    .then(data => ({
+      data,
+      // pagination stuff
+      page: page,
+      rowsNumber: rowCount,
+      descending,
+      sortBy: orderBy,
+      rowsPerPage: limit
+    }))
 }
 
 function getPeopleCountHourlyInZone (zoneId, date) {

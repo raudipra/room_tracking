@@ -7,6 +7,7 @@ const dao = require('./dao')
 const validator = require('./validator')
 const utils = require('./utils')
 const logger = require('../config/logger').logger
+const { isTrue, isFalse } = require('../utils/bool')
 
 const router = express.Router()
 const upload = multer()
@@ -283,6 +284,11 @@ router.get('/:zoneId/people-within', (req, res, next) => {
   let fromTs = req.query.ts_from || null
   let toTs = req.query.ts_to || null
 
+  const orderBy = req.query.order_by || 'from'
+  let descending = req.query.descending || 'false'
+  let page = req.query.page || 1
+  let limit = req.query.limit || 10
+
   // do validation
   const errors = {}
   if (_.isNull(zoneId)) {
@@ -305,6 +311,25 @@ router.get('/:zoneId/people-within', (req, res, next) => {
     errors.ts_to = '`ts_to` is empty! You need to define either `date` or (`ts_from` and `ts_to`) pair.'
   }
 
+  // pagination validation
+  const validOrderBy = ['from', 'person_id', 'is_known', 'to', 'person_name']
+  if (!validOrderBy.includes(orderBy)) {
+    errors.order_by = `unknown order parameter \`${orderBy}\`!`
+  }
+  if (!isTrue(descending) && !isFalse(descending)) {
+    errors.descending = `unknown value \`${descending}\`!`
+  } else {
+    descending = isTrue(descending)
+  }
+  page = Number.parseInt(page)
+  if (Number.isNaN(page) || page <= 0) {
+    errors.page = 'invalid page!'
+  }
+  limit = Number.parseInt(limit)
+  if (Number.isNaN(limit) || limit <= 0 || limit > 50) {
+    errors.page = 'invalid limit!'
+  }
+
   if (!_.isEmpty(errors)) {
     res.status(400).json({ errors })
     return
@@ -312,7 +337,7 @@ router.get('/:zoneId/people-within', (req, res, next) => {
 
   // execute
   if (date !== null) {
-    dao.getPeopleInZoneByDate(zoneId, date)
+    dao.getPeopleInZoneByDate(zoneId, date, page, limit, orderBy, descending)
       .then(result => {
         res.json(result)
       })
@@ -320,7 +345,7 @@ router.get('/:zoneId/people-within', (req, res, next) => {
   } else {
     fromTs = fromTs.replace('T', ' ')
     toTs = toTs.replace('T', ' ')
-    dao.getPeopleInZoneByDateTimeRange(zoneId, fromTs, toTs)
+    dao.getPeopleInZoneByDateTimeRange(zoneId, fromTs, toTs, page, limit, orderBy, descending)
       .then(result => {
         res.json(result)
       })

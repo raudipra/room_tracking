@@ -23,17 +23,44 @@ function getPeopleCountHourlyInZone (zoneId, date) {
     .then(response => response.data)
 }
 
-function getPeopleWihtinDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
-  return axios.get(`${BASE_URL}/zones/${zoneId}/people-within?ts_from=${dateTimeFrom}&ts_to=${dateTimeTo}`)
-    .then(response => response.data.map(r => Object.assign(r, {
-      from: new Date(r.from),
-      to: r.to ? new Date(r.to) : null
-    })))
+function getPeopleWihtinDateTimeRange (zoneId, dateTimeFrom, dateTimeTo, page, rowsPerPage, sortBy, descending) {
+  let url = `${BASE_URL}/zones/${zoneId}/people-within?ts_from=${dateTimeFrom}&ts_to=${dateTimeTo}`
+  url += `&page=${page}`
+  url += `&limit=${rowsPerPage}`
+  url += `&order_by=${sortBy}`
+  url += `&descending=${descending}`
+
+  return axios.get(url)
+    .then(response => {
+      const data = response.data.data
+
+      response.data.data = data.map(r => Object.assign(r, {
+        from: new Date(r.from),
+        to: r.to ? new Date(r.to) : null
+      }))
+
+      return response.data
+    })
 }
 
-function getPeopleWihtinDate (zoneId, date) {
-  return axios.get(`${BASE_URL}/zones/${zoneId}/people-within?date=${date}`)
-    .then(response => response.data)
+function getPeopleWihtinDate (zoneId, date, page, rowsPerPage, sortBy, descending) {
+  let url = `${BASE_URL}/zones/${zoneId}/people-within?date=${date}`
+  url += `&page=${page}`
+  url += `&limit=${rowsPerPage}`
+  url += `&order_by=${sortBy}`
+  url += `&descending=${descending}`
+
+  return axios.get(url)
+    .then(response => {
+      const data = response.data.data
+
+      response.data.data = data.map(r => Object.assign(r, {
+        from: new Date(r.from),
+        to: r.to ? new Date(r.to) : null
+      }))
+
+      return response.data
+    })
 }
 
 function getPeopleForZone (zoneId) {
