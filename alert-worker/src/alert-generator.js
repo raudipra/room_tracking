@@ -12,30 +12,30 @@ const DATETIME_FORMAT = require('./utils/date-time').DEFAULT_SQL_DATETIME_FORMAT
 const ALERT_TYPES = require('./alert-types')
 const WORKER_ID = process.env.WORKER_ID || 'worker'
 
+let isRunning = false
 const AlertGenerator = {
-  _instance: null,
   run: function () {
-    if (this._instance !== null) {
-      return this._instance
+    if (isRunning) {
+      return
     }
-    this._instance = main()
+    isRunning = true
+    main()
       .catch(err => {
         logger.error(err)
         LocationUpdater.events.emit('error', err)
       })
       .finally(function () {
-        this._instance = null // cleanup running instance.
+        isRunning = false
       }.bind(this))
-    return this._instance
   },
   isRunning: function () {
-    return this._instance !== null
+    return isRunning
   },
   events: new EventEmitter()
 }
 
 LocationUpdater.events.on('finish', () => {
-  if (AlertGenerator.isRunning()) {
+  if (isRunning) {
     return
   }
   AlertGenerator.run()
@@ -73,7 +73,7 @@ function generateAlerts (results, conn, timestamp) {
       })
       const atZoneFrom = DateTime.fromSQL(row.from)
 
-      if (atZoneFrom.diff(now) > overstayLimitDuration) {
+      if (atZoneFrom.diff(timestamp) > overstayLimitDuration) {
         alertQueryPromises.push(generateAlertQuery(timestamp, row, ALERT_TYPES.OVERSTAY))
       }
     }
@@ -81,7 +81,7 @@ function generateAlerts (results, conn, timestamp) {
 
   if (alertQueryPromises.length === 0) {
     logger.warn('No alert to generate.')
-    return { unknownPerson: 0, unauthorized: 0, overstay: 0 }
+    return Promise.resolve({ unknownPerson: 0, unauthorized: 0, overstay: 0 })
   }
 
   return Promise.all(alertQueryPromises)
@@ -91,7 +91,7 @@ function generateAlerts (results, conn, timestamp) {
       let alertUnauthorizedCount = _.has(prev, 'alertCounts.unauthorized') ? prev.alertCounts.unauthorized : 0
       let alertOverstayCount = _.has(prev, 'alertCounts.overstay') ? prev.alertCounts.overstay : 0
 
-      if (next.query !== null) {
+      if (next.query !== '') {
         queries += next.query
         switch (next.alertType) {
           case ALERT_TYPES.UNKNOWN:
@@ -117,10 +117,13 @@ function generateAlerts (results, conn, timestamp) {
     }, { queries: '', alertCounts: { unknownPerson: 0, unauthorized: 0, overstay: 0 } }))
     .then(results => {
       if (results.queries !== '') {
-        return conn.query(results.queries)
+        logger.debug('Executing update query')
+        return conn.query(results.queries).then(() => results.alertCounts)
+      } else {
+        logger.debug('No query to execute')
+        return results.alertCounts
       }
     })
-    .then(() => results.alertCounts)
 }
 
 /**
@@ -164,14 +167,14 @@ function generateAlertQuery (timestamp, personDetails, alertType) {
         AND created_at > ?
     )
   `
-
-  return Promise.using(db.getConnection(), conn => conn.query(sqlCheckExistingAlert,
+  return Promise.using(db.getBackoffConnection(), conn => conn.query(sqlCheckExistingAlert,
     [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp]
-  ).then(result => {
-    const hasExistingAlert = Number.parseInt(result) === 1
+  ).then(([result]) => {
+    const hasExistingAlert = Number.parseInt(Object.values(result[0])[0]) === 1
     const details = JSON.stringify({ // TODO define for each alert type.
       from: personDetails.from
     })
+
     const sqlInsertAlert = `
       INSERT INTO zone_alerts (id, zone_id, type, details, person_id, is_known, worker_id)
       VALUES (uuid(), ?, ?, ?, ?, ?, ?);
@@ -206,7 +209,7 @@ function main () {
       z.config AS config
     FROM zone_persons zp
     JOIN zones z ON z.id = zp.zone_id
-    WHERE worker_updated_at = ?
+    WHERE COALESCE(worker_updated_at, worker_created_at) = ?
       AND zp.\`to\` IS NULL
       AND zp.updated_at >= DATE_SUB(NOW(), INTERVAL 1 DAY) -- ignore location updates that has been stale, i.e. no update for one day.
     `

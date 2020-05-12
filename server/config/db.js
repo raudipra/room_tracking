@@ -14,14 +14,10 @@ const pool = mysql.createPool({
   Promise: bluebird
 })
 
-function blobToJpegBase64 (blob) {
-  return 'data:image/jpeg;charset=utf-8;base64,' + Buffer.from(blob).toString('base64')
-}
-
 function getConnection () {
   return pool.getConnection().disposer(conn => {
     conn.release()
   })
 }
 
-module.exports = { getConnection, blobToJpegBase64 }
+module.exports = { getConnection }

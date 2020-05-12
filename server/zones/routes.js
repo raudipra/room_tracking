@@ -318,8 +318,8 @@ router.get('/:zoneId/people-within', (req, res, next) => {
       })
       .catch(next)
   } else {
-    fromTs = fromTs.replace('T', '')
-    toTs = toTs.replace('T', '')
+    fromTs = fromTs.replace('T', ' ')
+    toTs = toTs.replace('T', ' ')
     dao.getPeopleInZoneByDateTimeRange(zoneId, fromTs, toTs)
       .then(result => {
         res.json(result)

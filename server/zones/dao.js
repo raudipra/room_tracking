@@ -1,8 +1,9 @@
 const _ = require('lodash')
 const Promise = require('bluebird')
+const logger = require('../config/logger').logger.child({ module: 'zones/dao' })
 
 const db = require('../config/db')
-const blobToJpegBase64 = db.blobToJpegBase64
+const blobToJpegBase64 = require('../utils/image-conv').blobToJpegBase64
 
 const NotFoundError = require('../utils/errors').NotFoundError
 
@@ -257,6 +258,25 @@ function getAlerts (zoneIds, isDismissed = null) {
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, args)
     .then(([rows]) => {
+      // convert the images
+      return Promise.all(rows.map(row => {
+        if (_.isNull(row.portrait)) {
+          return Promise.resolve(row)
+        } else {
+          return blobToJpegBase64(row.portrait)
+            .then(resultBase64 => {
+              row.portrait = resultBase64
+              return row
+            })
+            .catch(err => {
+              logger.warn(`Failed to convert image. Message: ${err.message}`)
+              row.portrait = null
+              return Promise.resolve(row)
+            })
+        }
+      }))
+    })
+    .then(rows => {
       const data = {}
       rows.forEach(row => {
         const zoneId = row.zone_id.toString()
@@ -274,7 +294,7 @@ function getAlerts (zoneIds, isDismissed = null) {
             id: row.person_id,
             is_known: Number.parseInt(row.is_known) === 1,
             from: details.from || row.created_at,
-            avatar: !_.isNull(row.portrait) ? blobToJpegBase64(row.portrait) : null
+            avatar: row.portrait
           }
         })
       })
@@ -285,7 +305,8 @@ function getAlerts (zoneIds, isDismissed = null) {
         }
       })
       return data
-    }))
+    })
+  )
 }
 
 function getPeopleInZones (zoneIds) {
@@ -311,14 +332,32 @@ function getPeopleInZones (zoneIds) {
     ORDER BY zp.from
   `
   return Promise.using(db.getConnection(), conn => conn.query(sql, [zoneIds])
-    .then(([rows]) => rows.reduce((prev, row) => {
+    .then(([rows]) => {
+      return Promise.all(rows.map(row => {
+        if (_.isNull(row.portrait)) {
+          return Promise.resolve(row)
+        } else {
+          return blobToJpegBase64(row.portrait)
+            .then(resultBase64 => {
+              row.portrait = resultBase64
+              return row
+            })
+            .catch(err => {
+              logger.warn(`Failed to convert image. Message: ${err.message}`)
+              row.portrait = null
+              return Promise.resolve(row)
+            })
+        }
+      }))
+    })
+    .then(rows => rows.reduce((prev, row) => {
       const personId = row.is_known === 1 ? `${row.id}` : `U-${row.id}`
       const personDetails = prev.has(personId) ? prev.get(personId) : {
         id: row.id,
         is_known: Number.parseInt(row.is_known) === 1,
         from: row.from,
         name: row.name,
-        avatar: !_.isNull(row.portrait) ? blobToJpegBase64(row.portrait) : null,
+        avatar: row.portrait,
         alerts: []
       }
       if (!_.isNull(row.alert_type)) {
@@ -384,11 +423,29 @@ function getPeopleInZoneByDate (zoneId, date) {
   const params = [zoneId, date, date]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => rows.map(row => ({
+    .then(([rows]) => {
+      return Promise.all(rows.map(row => {
+        if (_.isNull(row.person_portrait)) {
+          return Promise.resolve(row)
+        } else {
+          return blobToJpegBase64(row.person_portrait)
+            .then(resultBase64 => {
+              row.person_portrait = resultBase64
+              return row
+            })
+            .catch(err => {
+              logger.warn(`Failed to convert image. Message: ${err.message}`)
+              row.person_portrait = null
+              return Promise.resolve(row)
+            })
+        }
+      }))
+    })
+    .then(rows => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
       person_name: row.person_name,
-      avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
+      avatar: row.person_portrait,
       from: row.from.toISOString(),
       to: !_.isNull(row.to) ? row.to.toISOString() : null
     }))))
@@ -412,11 +469,29 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
   const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => rows.map(row => ({
+    .then(([rows]) => {
+      return Promise.all(rows.map(row => {
+        if (_.isNull(row.person_portrait)) {
+          return Promise.resolve(row)
+        } else {
+          return blobToJpegBase64(row.person_portrait)
+            .then(resultBase64 => {
+              row.person_portrait = resultBase64
+              return row
+            })
+            .catch(err => {
+              logger.warn(`Failed to convert image. Message: ${err.message}`)
+              row.person_portrait = null
+              return Promise.resolve(row)
+            })
+        }
+      }))
+    })
+    .then(rows => rows.map(row => ({
       person_id: row.person_id,
       is_known: Number.parseInt(row.is_known) === 1,
       person_name: row.person_name,
-      avatar: !_.isNull(row.person_portrait) ? blobToJpegBase64(row.person_portrait) : null,
+      avatar: row.person_portrait,
       from: row.from.toISOString(),
       to: _.isNull(row.to) ? null : row.to.toISOString()
     }))))
@@ -453,7 +528,7 @@ function getPeopleCountHourlyInZone (zoneId, date) {
     AND ((DATE(zp.\`from\`) >= ? AND DATE(zp.\`to\`) <= ?)
       OR (DATE(zp.\`from\`) >= ? AND zp.\`to\` IS NULL))
     GROUP BY person_id, is_known, ts_from
-    ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL))
+    ) zpf ON ((ts_hour BETWEEN ts_from AND ts_to) OR (ts_hour >= ts_from AND ts_to IS NULL AND ts_hour <= NOW()))
     WHERE ts_hour BETWEEN ? AND ?
     GROUP BY v.ts_hour, zpf.person_id, zpf.is_known -- count hourly as 1
   ) a
