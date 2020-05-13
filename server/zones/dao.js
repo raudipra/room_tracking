@@ -80,8 +80,8 @@ SELECT
   alert_type,
   has_alert
 FROM zone_groups zg
-JOIN zones z1 ON zg.id = z1.zone_group_id
-JOIN (
+LEFT JOIN zones z1 ON zg.id = z1.zone_group_id
+LEFT JOIN (
   SELECT
     z.id,
    SUM(CASE WHEN zp.person_id IS NULL THEN 0 ELSE 1 END) AS current_persons_count
@@ -92,7 +92,7 @@ JOIN (
     AND DATE(zp.from) >= CURRENT_DATE
   GROUP BY z.id
 ) zp1 ON zp1.id = z1.id
-JOIN (
+LEFT JOIN (
   SELECT
     zones.id,
     alert_type,
@@ -127,15 +127,17 @@ ORDER BY group_id, zone_id, alert_type
           }
         }
         const zones = data[current.group_id].zones
-        if (!_.has(zones, current.zone_id)) {
-          zones[current.zone_id] = {
-            id: current.zone_id,
-            name: current.zone_name,
-            persons_count: Number.parseInt(current.current_persons_count),
-            alerts: { [current.alert_type]: Number.parseInt(current.has_alert) === 1 }
+        if (current.zone_id !== null) {
+          if (!_.has(zones, current.zone_id)) {
+            zones[current.zone_id] = {
+              id: current.zone_id,
+              name: current.zone_name,
+              persons_count: Number.parseInt(current.current_persons_count),
+              alerts: { [current.alert_type]: Number.parseInt(current.has_alert) === 1 }
+            }
+          } else {
+            zones[current.zone_id].alerts[current.alert_type] = Number.parseInt(current.has_alert) === 1
           }
-        } else {
-          zones[current.zone_id].alerts[current.alert_type] = Number.parseInt(current.has_alert) === 1
         }
         return data
       }, {})
@@ -170,7 +172,7 @@ SELECT
   z.created_at AS zone_created_at,
   z.updated_at AS zone_updated_at
 FROM zone_groups zg
-JOIN zones z ON z.zone_group_id = zg.id
+LEFT JOIN zones z ON z.zone_group_id = zg.id
 ${zoneId ? 'WHERE zg.id=?' : ''}
 ORDER BY group_id, zone_id
   `
@@ -191,14 +193,16 @@ ORDER BY group_id, zone_id
           }
         }
 
-        data[current.group_id].zones.push({
-          id: current.zone_id,
-          name: current.zone_name,
-          description: current.zone_description,
-          config: current.zone_config,
-          created_at: current.zone_created_at,
-          updated_at: current.zone_updated_at
-        })
+        if (current.zone_id !== null) {
+          data[current.group_id].zones.push({
+            id: current.zone_id,
+            name: current.zone_name,
+            description: current.zone_description,
+            config: current.zone_config,
+            created_at: current.zone_created_at,
+            updated_at: current.zone_updated_at
+          })
+        }
         return data
       }, {})
 
@@ -704,11 +708,14 @@ function editZoneGroup (id, zoneGroupData) {
     SET name = ?, description = ?, layout_src = COALESCE(?, layout_src), config = ?
     WHERE id = ?
   `
+  const config = {
+    default_overstay_limit: zoneGroupData.default_overstay_limit
+  }
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(zoneGroupData.config),
+    JSON.stringify(config),
     id, id
   ]
 
@@ -722,18 +729,21 @@ function createZoneGroup (zoneGroupData) {
     VALUES (?, ?, ?, ?, now());
     SELECT * FROM zone_groups WHERE id = (SELECT LAST_INSERT_ID())
   `
+  const config = {
+    default_overstay_limit: zoneGroupData.default_overstay_limit
+  }
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(zoneGroupData.config)
+    JSON.stringify(config)
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([result]) => {
       const data = result[1][0]
       return getZoneGroupsWithZone(data.id)
-        .then(result => result[0])
+        .then(result2 => result2[0])
     }))
 }
 

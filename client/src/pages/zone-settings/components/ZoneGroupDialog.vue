@@ -179,7 +179,6 @@ export default {
       }
       data.append('name', zoneGroupData.name)
       data.append('description', zoneGroupData.description)
-      data.append('is_active', zoneGroupData.is_active ? '1' : '0')
       if (zoneGroupData.layout) {
         data.append('layout', zoneGroupData.layout)
       }
