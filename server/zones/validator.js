@@ -87,6 +87,7 @@ function validateZoneGroupData (data) {
     const defaultOverstayLimit = data.default_overstay_limit
     if (!HOUR_MINUTES_REGEX.test(defaultOverstayLimit)) {
       errors.default_overstay_limit = 'default_overstay_limit is invalid! it should be in HH:MM format'
+    }
   }
 
   return errors
