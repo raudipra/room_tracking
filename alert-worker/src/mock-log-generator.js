@@ -1,7 +1,7 @@
 const mysql = require('mysql2/promise')
 const _ = require('lodash')
 const Promise = require('bluebird')
-const DateTime = require('luxon').DateTime
+const { DateTime } = require('luxon')
 const faker = require('faker')
 const logger = require('./utils/logger')('mock-log-generator')
 
