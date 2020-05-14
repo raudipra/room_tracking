@@ -709,15 +709,13 @@ function editZoneGroup (id, zoneGroupData) {
     SET name = ?, description = ?, layout_src = COALESCE(?, layout_src), config = ?
     WHERE id = ?
   `
-  const config = {
-    default_overstay_limit: zoneGroupData.default_overstay_limit
-  }
+  logger.debug(JSON.stringify(zoneGroupData.config))
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(config),
-    id, id
+    JSON.stringify(zoneGroupData.config),
+    id
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
@@ -730,14 +728,11 @@ function createZoneGroup (zoneGroupData) {
     VALUES (?, ?, ?, ?, now());
     SELECT * FROM zone_groups WHERE id = (SELECT LAST_INSERT_ID())
   `
-  const config = {
-    default_overstay_limit: zoneGroupData.default_overstay_limit
-  }
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(config)
+    JSON.stringify(zoneGroupData.config)
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
