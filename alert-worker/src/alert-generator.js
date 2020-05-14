@@ -20,6 +20,7 @@ const AlertGenerator = {
     }
     isRunning = true
     main()
+      .then(() => null)
       .catch(err => {
         logger.error(err)
         LocationUpdater.events.emit('error', err)
@@ -27,6 +28,7 @@ const AlertGenerator = {
       .finally(function () {
         isRunning = false
       }.bind(this))
+    return null
   },
   isRunning: function () {
     return isRunning
@@ -235,6 +237,7 @@ function main () {
         const totalAlertCount = Object.values(alertDetails).reduce((prev, curr) => prev + curr, 0)
         logger.info(`${totalAlertCount} alert(s) generated in ${secondsElapsed} second(s). Unknown: ${alertDetails.unknownPerson}. Unauthorized: ${alertDetails.unauthorized}. Overstay: ${alertDetails.overstay}`, meta)
         AlertGenerator.events.emit('finish', meta)
+        return null
       })
   })
 }

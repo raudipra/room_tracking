@@ -82,6 +82,15 @@ router.post('/groups', upload.single('layout'), (req, res, next) => {
 
   // validate
   const zoneGroupData = req.body
+  // try to parse as json
+  const config = zoneGroupData.config
+  try {
+    zoneGroupData.config = JSON.parse(zoneGroupData.config)
+  } catch (e) {
+    // ignore the error, let the validator takeover.
+    logger.warn(e)
+    zoneGroupData.config = config
+  }
   const errors = validator.validateZoneGroupData(zoneGroupData)
 
   const layoutFile = req.file
@@ -120,10 +129,15 @@ router.patch('/groups/:groupId', upload.single('layout'), (req, res, next) => {
   // validate
   const zoneGroupData = req.body
   const groupId = req.params.groupId
-  zoneGroupData.config = {
-    default_overstay_limit: _.get(zoneGroupData, 'default_overstay_limit', null)
+  // try to parse as json
+  const config = zoneGroupData.config
+  try {
+    zoneGroupData.config = JSON.parse(zoneGroupData.config)
+  } catch (e) {
+    // ignore the error, let the validator takeover.
+    logger.warn(e)
+    zoneGroupData.config = config
   }
-
   const errors = validator.validateZoneGroupData(zoneGroupData)
 
   if (!_.isEmpty(errors)) {
@@ -326,7 +340,7 @@ router.get('/:zoneId/people-within', (req, res, next) => {
     errors.page = 'invalid page!'
   }
   limit = Number.parseInt(limit)
-  if (Number.isNaN(limit) || limit <= 0 || limit > 50) {
+  if (Number.isNaN(limit) || limit <= 0 || limit > 100) {
     errors.page = 'invalid limit!'
   }
 

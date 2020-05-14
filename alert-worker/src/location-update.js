@@ -384,6 +384,7 @@ FOR UPDATE`
             const meta = { logsProcessed: faceLogIds.length, peopleProcessed: peopleLocation.size }
             logger.info(`Updated location(s). Affected people: ${meta.peopleProcessed}. Logs processed: ${meta.logsProcessed}`, meta)
             LocationUpdater.events.emit('finish', meta)
+            return null
           })
       })
     })
@@ -415,6 +416,7 @@ const LocationUpdater = {
     }
     isRunning = true
     main()
+      .then(() => null)
       .catch(function (err) {
         logger.error(err)
         events.emit('error', err)

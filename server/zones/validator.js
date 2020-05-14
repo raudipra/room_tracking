@@ -81,12 +81,27 @@ function validateZoneGroupData (data) {
     }
   }
 
-  if (!_.has(data, 'default_overstay_limit')) {
-    errors.default_overstay_limit = 'default_overstay_limit is required!'
+  if (!_.has(data, 'config')) {
+    errors.config = 'config is required!'
+  } else if (!_.isObjectLike(data, 'config')) {
+    errors.config = 'config is invalid!'
   } else {
-    const defaultOverstayLimit = data.default_overstay_limit
-    if (!HOUR_MINUTES_REGEX.test(defaultOverstayLimit)) {
-      errors.default_overstay_limit = 'default_overstay_limit is invalid! it should be in HH:MM format'
+    const configErrors = {}
+    const config = data.config
+
+    // validate the config
+    if (!_.has(config, 'default_overstay_limit')) {
+      configErrors.default_overstay_limit = 'default_overstay_limit is required!'
+    } else {
+      const defaultOverstayLimit = config.default_overstay_limit
+      if (!HOUR_MINUTES_REGEX.test(defaultOverstayLimit)) {
+        configErrors.default_overstay_limit = 'default_overstay_limit is invalid! it should be in HH:MM format'
+      }
+    }
+
+    if (!_.isEmpty(configErrors)) {
+      errors.config = configErrors
+    }
   }
 
   return errors

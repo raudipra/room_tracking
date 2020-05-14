@@ -51,7 +51,7 @@
             <v-row>
               <v-col cols="12">
                 <v-text-field
-                  v-model="currentZoneGroup.config.default_overstay_limit"
+                  v-model="currentZoneGroup.default_overstay_limit"
                   label="Default Overstay Limit"
                   :disabled="isLoading"
                   :rules="overstayLimitRules"
@@ -184,7 +184,10 @@ export default {
       if (zoneGroupData.layout) {
         data.append('layout', zoneGroupData.layout)
       }
-      data.append('config', JSON.stringify(zoneGroupData.config))
+      const config = {
+        default_overstay_limit: zoneGroupData.default_overstay_limit
+      }
+      data.append('config', JSON.stringify(config))
 
       vm.isLoading = true
       const apiPromise = vm.isEdit ? api.editZoneGroup(vm.currentZoneGroup.id, data) : api.createZoneGroup(data)
