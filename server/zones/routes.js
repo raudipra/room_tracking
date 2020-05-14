@@ -326,7 +326,7 @@ router.get('/:zoneId/people-within', (req, res, next) => {
     errors.page = 'invalid page!'
   }
   limit = Number.parseInt(limit)
-  if (Number.isNaN(limit) || limit <= 0 || limit > 50) {
+  if (Number.isNaN(limit) || limit <= 0 || limit > 100) {
     errors.page = 'invalid limit!'
   }
 

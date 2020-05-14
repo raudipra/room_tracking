@@ -48,7 +48,7 @@
 // TODO move to separate file?
 $default-off-state-color: map-get($blue-grey, base)
 /* alerts is defined here */
-$alerts: 'room-active' map-get($yellow, base), 'overstay' map-get($yellow, base), 'unknown-person' map-get($red, base)
+$alerts: 'unauthorized' map-get($yellow, base), 'overstay' map-get($yellow, base), 'unknown-person' map-get($red, base)
 
 @each $tuple in $alerts
   .alert-#{nth($tuple, 1)}

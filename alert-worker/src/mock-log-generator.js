@@ -3,6 +3,7 @@ const _ = require('lodash')
 const Promise = require('bluebird')
 const DateTime = require('luxon').DateTime
 const faker = require('faker')
+const logger = require('./utils/logger')('mock-log-generator')
 
 require('dotenv').config()
 
@@ -42,7 +43,7 @@ function addNewFaceLog (camerasAndZones, people, maxTries = 5) {
     throw new Error('addNewFaceLog has expired.')
   }
 
-  console.info(`[${DateTime.local().toSQL()}] Creating new row`)
+  logger.debug('Creating new row')
   const cameraZone = faker.random.arrayElement(camerasAndZones)
   const person = faker.random.arrayElement([...people, null])
 
@@ -56,13 +57,14 @@ function addNewFaceLog (camerasAndZones, people, maxTries = 5) {
     isKnown ? person : null, // person
   ]))
     .then(() => {
-      console.info(`[${DateTime.local().toSQL()}] New row created. Person: {id: ${person || 'null'}, is_known: ${isKnown}}`)
+      logger.info(`New row created. Person: {id: ${person || 'null'}, is_known: ${isKnown}}`)
       setTimeout(() => {
         addNewFaceLog(camerasAndZones, people, maxTries)
       }, INPUT_INTERVAL)
+      return null
     })
     .catch(err => {
-      console.error(err)
+      logger.error(err)
       setTimeout(() => {
         addNewFaceLog(camerasAndZones, people, maxTries - 1)
       }, RETRY_INTERVAL)
@@ -84,9 +86,10 @@ function main () {
       // 1. exited
       // 2. failed maximum tries
       addNewFaceLog(camerasAndZones, people)
+      return null
     })
     .catch(err => {
-      console.error(err)
+      logger.error(err)
     })
 }
 

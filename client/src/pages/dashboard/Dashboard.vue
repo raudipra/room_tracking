@@ -131,7 +131,7 @@ export default {
       const currentZoneIdx = activeZoneGroup.zones.findIndex(z => z.id === zone)
       if (currentZoneIdx !== -1) {
         const currentZone = activeZoneGroup.zones[currentZoneIdx]
-        currentZone.alertUnknownPerson = alerts.alertUnknownPerson
+        currentZone.alertUnknownPerson = alerts.alertUnknown
         currentZone.alertOverstay = alerts.alertOverstay
         currentZone.alertUnauthorized = alerts.alertUnauthorized
         activeZoneGroup.zones[currentZoneIdx] = currentZone
