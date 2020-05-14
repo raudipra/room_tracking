@@ -156,6 +156,7 @@ ORDER BY group_id, zone_id, alert_type
 }
 
 function getZoneGroupsWithZone (zoneId = null) {
+  // Use Left Join to get Zone Group without Zone so we can add Zone
   const sql = `
 SELECT
   zg.id AS group_id,
