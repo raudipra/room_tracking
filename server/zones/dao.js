@@ -80,8 +80,8 @@ SELECT
   alert_type,
   has_alert
 FROM zone_groups zg
-JOIN zones z1 ON zg.id = z1.zone_group_id
-JOIN (
+LEFT JOIN zones z1 ON zg.id = z1.zone_group_id
+LEFT JOIN (
   SELECT
     z.id,
    SUM(CASE WHEN zp.person_id IS NULL THEN 0 ELSE 1 END) AS current_persons_count
@@ -92,7 +92,7 @@ JOIN (
     AND DATE(zp.from) >= CURRENT_DATE
   GROUP BY z.id
 ) zp1 ON zp1.id = z1.id
-JOIN (
+LEFT JOIN (
   SELECT
     zones.id,
     alert_type,
@@ -127,15 +127,17 @@ ORDER BY group_id, zone_id, alert_type
           }
         }
         const zones = data[current.group_id].zones
-        if (!_.has(zones, current.zone_id)) {
-          zones[current.zone_id] = {
-            id: current.zone_id,
-            name: current.zone_name,
-            persons_count: Number.parseInt(current.current_persons_count),
-            alerts: { [current.alert_type]: Number.parseInt(current.has_alert) === 1 }
+        if (current.zone_id !== null) {
+          if (!_.has(zones, current.zone_id)) {
+            zones[current.zone_id] = {
+              id: current.zone_id,
+              name: current.zone_name,
+              persons_count: Number.parseInt(current.current_persons_count),
+              alerts: { [current.alert_type]: Number.parseInt(current.has_alert) === 1 }
+            }
+          } else {
+            zones[current.zone_id].alerts[current.alert_type] = Number.parseInt(current.has_alert) === 1
           }
-        } else {
-          zones[current.zone_id].alerts[current.alert_type] = Number.parseInt(current.has_alert) === 1
         }
         return data
       }, {})
@@ -192,14 +194,16 @@ ORDER BY group_id, zone_id
           }
         }
 
-        data[current.group_id].zones.push({
-          id: current.zone_id,
-          name: current.zone_name,
-          description: current.zone_description,
-          config: current.zone_config,
-          created_at: current.zone_created_at,
-          updated_at: current.zone_updated_at
-        })
+        if (current.zone_id !== null) {
+          data[current.group_id].zones.push({
+            id: current.zone_id,
+            name: current.zone_name,
+            description: current.zone_description,
+            config: current.zone_config,
+            created_at: current.zone_created_at,
+            updated_at: current.zone_updated_at
+          })
+        }
         return data
       }, {})
 
@@ -405,26 +409,37 @@ function dismissAlert (alertId) {
  * @param {!number|string} zoneId
  * @param {!string} date
  */
-function getPeopleInZoneByDate (zoneId, date) {
+function getPeopleInZoneByDate (zoneId, date, page = 1, limit = 10, orderBy = 'from', descending = false) {
   const sql = `
     SELECT
       zp.person_id,
       zp.is_known,
       zp.from,
       zp.to,
-      p.name AS person_name,
+      COALESCE(p.name, 'UNKNOWN') AS person_name,
       p.portrait AS person_portrait
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
       AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
-    ORDER BY zp.from
+    ORDER BY ?? ${descending ? 'DESC' : 'ASC'}
+    LIMIT ?
+    OFFSET ?;
+    SELECT COUNT(*) AS row_count
+    FROM zone_persons zp
+    WHERE zp.zone_id = ?
+      AND (DATE(zp.from) = ? OR DATE(zp.to) = ?)
   `
-  const params = [zoneId, date, date]
+  const params = [
+    zoneId, date, date, orderBy, limit, (page - 1) * limit,
+    zoneId, date, date
+  ]
 
+  let rowCount
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => {
-      return Promise.all(rows.map(row => {
+    .then(([results]) => {
+      rowCount = results[1][0].row_count
+      return Promise.all(results[0].map(row => {
         if (_.isNull(row.person_portrait)) {
           return Promise.resolve(row)
         } else {
@@ -449,28 +464,48 @@ function getPeopleInZoneByDate (zoneId, date) {
       from: row.from.toISOString(),
       to: !_.isNull(row.to) ? row.to.toISOString() : null
     }))))
+    .then(data => ({
+      data,
+      // pagination stuff
+      page: page,
+      rowsNumber: rowCount,
+      descending,
+      sortBy: orderBy,
+      rowsPerPage: limit
+    }))
 }
 
-function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
+function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo, page = 1, limit = 10, orderBy = 'from', descending = false) {
   const sql = `
     SELECT
       zp.person_id,
       zp.is_known,
       zp.from,
       zp.to,
-      p.name AS person_name,
+      COALESCE(p.name, 'UNKNOWN') AS person_name,
       p.portrait AS person_portrait
     FROM zone_persons zp
     LEFT JOIN persons p ON zp.is_known IS TRUE AND zp.person_id = p.id
     WHERE zp.zone_id = ?
       AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
-    ORDER BY zp.from
+    ORDER BY ?? ${descending ? 'DESC' : 'ASC'}
+    LIMIT ?
+    OFFSET ?;
+    SELECT COUNT(*) AS row_count
+    FROM zone_persons zp
+    WHERE zp.zone_id = ?
+      AND ((zp.from >= ? AND zp.to <= ?) OR (zp.from >= ? AND zp.to IS NULL))
   `
-  const params = [zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom]
+  const params = [
+    zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom, orderBy, limit, (page - 1) * limit,
+    zoneId, dateTimeFrom, dateTimeTo, dateTimeFrom
+  ]
 
+  let rowCount
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
-    .then(([rows]) => {
-      return Promise.all(rows.map(row => {
+    .then(([results]) => {
+      rowCount = results[1][0].row_count
+      return Promise.all(results[0].map(row => {
         if (_.isNull(row.person_portrait)) {
           return Promise.resolve(row)
         } else {
@@ -495,6 +530,15 @@ function getPeopleInZoneByDateTimeRange (zoneId, dateTimeFrom, dateTimeTo) {
       from: row.from.toISOString(),
       to: _.isNull(row.to) ? null : row.to.toISOString()
     }))))
+    .then(data => ({
+      data,
+      // pagination stuff
+      page: page,
+      rowsNumber: rowCount,
+      descending,
+      sortBy: orderBy,
+      rowsPerPage: limit
+    }))
 }
 
 function getPeopleCountHourlyInZone (zoneId, date) {
@@ -665,11 +709,14 @@ function editZoneGroup (id, zoneGroupData) {
     SET name = ?, description = ?, layout_src = COALESCE(?, layout_src), config = ?
     WHERE id = ?
   `
+  const config = {
+    default_overstay_limit: zoneGroupData.default_overstay_limit
+  }
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(zoneGroupData.config),
+    JSON.stringify(config),
     id, id
   ]
 
@@ -683,18 +730,21 @@ function createZoneGroup (zoneGroupData) {
     VALUES (?, ?, ?, ?, now());
     SELECT * FROM zone_groups WHERE id = (SELECT LAST_INSERT_ID())
   `
+  const config = {
+    default_overstay_limit: zoneGroupData.default_overstay_limit
+  }
   const params = [
     zoneGroupData.name,
     zoneGroupData.description,
     zoneGroupData.layout,
-    JSON.stringify(zoneGroupData.config)
+    JSON.stringify(config)
   ]
 
   return Promise.using(db.getConnection(), conn => conn.query(sql, params)
     .then(([result]) => {
       const data = result[1][0]
       return getZoneGroupsWithZone(data.id)
-        .then(result => result[0])
+        .then(result2 => result2[0])
     }))
 }
 

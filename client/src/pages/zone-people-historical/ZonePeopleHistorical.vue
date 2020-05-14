@@ -98,7 +98,7 @@
           </div>
           <div class="col">
             <q-btn-group push>
-              <q-btn push icon="mdi-refresh" label="Get Data" size="md" :disabled="isLoading || !formValid" @click="getData" />
+              <q-btn push icon="mdi-refresh" label="Get Data" size="md" :disabled="isLoading || !formValid" @click="onRequest({ pagination })" />
               <q-btn push icon="mdi-file-delimited" label="Export CSV" size="md" :disabled="exportCsvDisabled" @click="exportToCsv" />
             </q-btn-group>
           </div>
@@ -109,8 +109,12 @@
               dense
               :columns="columns"
               :data="peopleRecords"
-              row-key="person_id"
-              :loading="isLoading">
+              :row-key="row => `${row.person_id}-${row.is_known}-${row.from}`"
+              :pagination.sync="pagination"
+              @request="onRequest"
+              :loading="isLoading"
+              :rows-per-page-options="[10, 25, 50, 100]"
+              binary-state-sort>
               <template v-slot:body="props">
                 <q-tr :props="props">
                   <q-td key="person_id" :props="props">
@@ -127,7 +131,7 @@
                       </span>
                     </q-avatar>
                   </q-td>
-                  <q-td key="name" :props="props">
+                  <q-td key="person_name" :props="props">
                     <span v-if="props.row.is_known">{{ props.row.person_name }}</span>
                     <span v-else class="text-red">UNKNOWN</span>
                   </q-td>
@@ -158,7 +162,13 @@ import dateTime from '@/common/mixins/date-time'
 const columns = [
   { label: 'ID', name: 'person_id', field: 'person_id', required: true },
   { label: 'Foto', align: 'center', name: 'avatar', field: 'avatar', sortable: false },
-  { label: 'Nama', align: 'left', name: 'name', field: 'person_name', sortable: true },
+  {
+    label: 'Nama',
+    align: 'left',
+    name: 'person_name',
+    field: 'person_name',
+    sortable: true
+  },
   {
     label: 'Waktu Masuk',
     name: 'from',
@@ -196,6 +206,13 @@ export default {
       maxDate: now.toFormat('yyyy/LL/dd'),
 
       wholeDay: false,
+      pagination: {
+        sortBy: 'from',
+        descending: false,
+        page: 1,
+        rowsPerPage: 10,
+        rowsNumber: 10
+      },
 
       zones: [],
       zone: null,
@@ -257,48 +274,64 @@ export default {
         })
     },
 
-    getData () {
+    onRequest (props) {
       if (this.isLoading) return
 
-      this.isLoading = true
-      const vm = this
+      const { page, rowsPerPage, sortBy, descending } = props.pagination
+      // no filter at the moment
 
-      let promise
-      if (this.wholeDay) {
-        promise = api.getPeopleWihtinDate(this.zone.id, this.date)
-      } else {
-        const tsFrom = `${this.date}T${formatHour(this.fromHour)}`
-        const tsTo = `${this.date}T${formatHour(this.toHour)}`
-        promise = api.getPeopleWihtinDateTimeRange(this.zone.id, tsFrom, tsTo)
-      }
-      promise
-        .then(results => {
-          vm.peopleRecords = results
-          vm.isLoading = false
+      this.isLoading = true
+      this.getData(page, rowsPerPage, sortBy, descending)
+        .then(result => {
+          // reset pagination
+          this.pagination.rowsNumber = result.rowsNumber
+          this.pagination.page = result.page
+          this.pagination.rowsPerPage = result.rowsPerPage
+          this.pagination.sortBy = result.sortBy
+          this.pagination.descending = result.descending
+
+          // clear and replace with the data from the API
+          this.peopleRecords.splice(0, this.peopleRecords.length, ...result.data)
+
+          this.isLoading = false
         })
         .catch(err => {
-          vm.isLoading = false
+          this.isLoading = false
           this.showError(err.message)
         })
     },
 
+    getData (page, rowsPerPage, sortBy, descending) {
+      let promise
+      if (this.wholeDay) {
+        promise = api.getPeopleWihtinDate(this.zone.id, this.date, page, rowsPerPage, sortBy, descending)
+      } else {
+        const tsFrom = `${this.date}T${formatHour(this.fromHour)}`
+        const tsTo = `${this.date}T${formatHour(this.toHour)}`
+        promise = api.getPeopleWihtinDateTimeRange(this.zone.id, tsFrom, tsTo, page, rowsPerPage, sortBy, descending)
+      }
+      return promise
+    },
+
     exportToCsv () {
       const DATETIME_FORMAT_EXPORT = 'yyyy-MM-dd HH:mm:ss'
+      const page = this.pagination.page
       const data = this.peopleRecords.map(r => [
         r.person_id,
+        r.is_known,
         r.is_known ? r.person_name : 'UNKNOWN',
         DateTime.fromJSDate(r.from).toFormat(DATETIME_FORMAT_EXPORT),
         r.to !== null ? DateTime.fromJSDate(r.to).toFormat(DATETIME_FORMAT_EXPORT) : 'NULL'
       ])
-      const headers = ['id', 'name', 'from', 'to']
+      const headers = ['id', 'is_known', 'name', 'from', 'to']
       const date = this.date.replace(/-/g, '')
       let filename
       if (this.wholeDay) {
-        filename = `${date}_zone-people-historical.csv`
+        filename = `${date}_zone-people-historical_page-${page}.csv`
       } else {
         const fromHour = this.fromHour < 10 ? `0${this.fromHour}` : `${this.fromHour}`
         const toHour = this.toHour < 10 ? `0${this.toHour}` : `${this.toHour}`
-        filename = `${date}_${fromHour}${toHour}_zone-people-historical.csv`
+        filename = `${date}_${fromHour}${toHour}_zone-people-historical_page-${page}.csv`
       }
 
       this.exportCsv(data, headers, filename)

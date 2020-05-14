@@ -170,6 +170,14 @@ function generateAlertQuery (timestamp, personDetails, alertType) {
   return Promise.using(db.getBackoffConnection(), conn => conn.query(sqlCheckExistingAlert,
     [personDetails.zone_id, personDetails.person_id, personDetails.is_known, alertType, minTimestamp]
   ).then(([result]) => {
+    /**
+     * This is how the result from MySQL is represented by this library
+     * [Array<TextRow>, Array<ColumnDefinition>]
+     * with TextRow contains object key-value pairs of the fetched results.
+     * The key value pairs contains <ColumnName>: <Result>
+     * Since the <ColumnName> for this result is 'EXISTS (...)',
+     * some trick is required to access the result.
+     */
     const hasExistingAlert = Number.parseInt(Object.values(result[0])[0]) === 1
     const details = JSON.stringify({ // TODO define for each alert type.
       from: personDetails.from

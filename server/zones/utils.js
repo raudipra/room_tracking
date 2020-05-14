@@ -23,7 +23,7 @@ function uploadLayoutFile (base64img) {
         .then(info => {
           logger.info(`Created ZoneGroup layout file at ${filepath}. Size: ${info.size} bytes.`)
         })
-        .then(() => path.join(filesystem.UPLOAD_IMAGE_PATH, filename).replace('\\', '/'))
+        .then(() => path.join(filesystem.UPLOAD_IMAGE_PATH, filename).replace(/\\/g, '/'))
     })
     .catch(err => {
       logger.error(`Caught error when saving file: ${err}`)

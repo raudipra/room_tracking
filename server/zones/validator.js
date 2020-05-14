@@ -81,27 +81,12 @@ function validateZoneGroupData (data) {
     }
   }
 
-  if (!_.has(data, 'config')) {
-    errors.config = 'config is required!'
-  } else if (!_.isObjectLike(data, 'config')) {
-    errors.config = 'config is invalid!'
+  if (!_.has(data, 'default_overstay_limit')) {
+    errors.default_overstay_limit = 'default_overstay_limit is required!'
   } else {
-    // FormData can't be read as Object. Maybe we need another way.
-    var config = JSON.parse(data.config)
-    const configErrors = {}
-    // validate the config
-    if (!_.has(config, 'default_overstay_limit')) {
-      configErrors.default_overstay_limit = 'default_overstay_limit is required!'
-    } else {
-      const defaultOverstayLimit = config.default_overstay_limit
-      if (!HOUR_MINUTES_REGEX.test(defaultOverstayLimit)) {
-        configErrors.default_overstay_limit = 'default_overstay_limit is invalid! it should be in HH:MM format'
-      }
-    }
-
-    if (!_.isEmpty(configErrors)) {
-      errors.config = configErrors
-    }
+    const defaultOverstayLimit = data.default_overstay_limit
+    if (!HOUR_MINUTES_REGEX.test(defaultOverstayLimit)) {
+      errors.default_overstay_limit = 'default_overstay_limit is invalid! it should be in HH:MM format'
   }
 
   return errors
