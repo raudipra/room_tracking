@@ -181,7 +181,7 @@ function generateAlertQuery (timestamp, personDetails, alertType) {
      * some trick is required to access the result.
      */
     const hasExistingAlert = Number.parseInt(Object.values(result[0])[0]) === 1
-    const details = JSON.stringify({ // TODO define for each alert type.
+    const details = JSON.stringify({
       from: personDetails.from
     })
 

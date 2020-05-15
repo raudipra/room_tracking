@@ -66,7 +66,6 @@ export default {
     dismissAlert (alertId) {
       api.dismissAlert(alertId)
         .then(() => {
-          // TODO pass data from API.
           this.$emit('dismiss-alert', alertId)
         })
     },

@@ -11,7 +11,11 @@ Server module for room tracking, built using NodeJS + Express
 
 1. Run `npm install` to fetch all required packages
 2. Set the database connection using `.env`. An example has been provided in `.env.example`. NOTE: You can also set the variables from the Environment Variable of your OS.
-3. Run `npm run dev`. This will run the server using a dev runtime that is designed to automatically restart the server whenever a change has been detected.
+3. Make sure you have run the migrations at the `sql` folder of this project.
+4. Run `npm run dev`. This will run the server using a dev runtime that is designed to automatically restart the server whenever a change has been detected.
+5. For debugging with external tools (e.g. Visual Studio Code), run `npm run debug`. This will run the server similar to `npm run dev`, with JS inspector that supports various V8 debugging tools (breakpoints, watchers, etc.). 
+  1. For Visual Studio Code, follow the following [link](https://stackoverflow.com/a/54231359/2935556) for example on how to setup your env.
+6. For production env, run `npm run start`.
 
 ## Project Structure
 
@@ -25,7 +29,8 @@ Server module for room tracking, built using NodeJS + Express
 4. `config` contains common functions shared across the app.
 5. `public` contains static files served by the app.
   1. All images of the zone is uploaded as a file and stored at `public/images/uploads`.
-6. `bin` contains small execution script used by express.js
+6. `utils` contains various utility functions.
+7. `bin` contains small execution script used by `Express.js`
 
 ## Additional References
 

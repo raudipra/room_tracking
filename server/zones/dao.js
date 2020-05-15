@@ -235,6 +235,7 @@ function getZoneGroup (zoneGroupId, conn) {
 
 function getAlerts (zoneIds, isDismissed = null) {
   // get 24 hours from now
+  // TODO pagination
   let sql = `
     SELECT
       za.id,
@@ -251,6 +252,7 @@ function getAlerts (zoneIds, isDismissed = null) {
     FROM zone_alerts za
     LEFT JOIN persons p ON za.person_id = p.id AND za.is_known = 1
     WHERE za.zone_id IN (?)
+      AND is_dismissed IS FALSE
     ORDER BY created_at DESC
   `
   const args = [zoneIds]
@@ -314,6 +316,8 @@ function getAlerts (zoneIds, isDismissed = null) {
 }
 
 function getPeopleInZones (zoneIds) {
+  // TODO optimize query
+  // TODO pagination
   const sql = `
     SELECT
       COALESCE(p.id, zp.person_id) AS id,
