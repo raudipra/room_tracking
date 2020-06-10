@@ -332,7 +332,7 @@ function getPeopleInZones (zoneIds) {
       zp.zone_id = za.zone_id
       AND zp.person_id = za.person_id
       AND zp.is_known = za.is_known
-      AND CONVERT_TZ(JSON_UNQUOTE(za.details->'$.from'), "+00:00", @@SESSION.time_zone) = zp.\`from\`
+      AND za.alert_from_virtual = zp.\`from\`
       AND za.is_dismissed = 0
     WHERE zp.to IS NULL
       AND zp.zone_id IN (?)

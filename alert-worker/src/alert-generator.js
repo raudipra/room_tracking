@@ -182,7 +182,7 @@ function generateAlertQuery (timestamp, personDetails, alertType) {
      */
     const hasExistingAlert = Number.parseInt(Object.values(result[0])[0]) === 1
     const details = JSON.stringify({
-      from: personDetails.from
+      from: personDetails.from.toFormat(DATETIME_FORMAT),
     })
 
     const sqlInsertAlert = `
