@@ -13,7 +13,7 @@
   "dependencies": {
     "bluebird": "^3.7.2",
     "dotenv": "^8.2.0",
-    "lodash": "^4.17.15",
+    "lodash": "^4.17.19",
     "luxon": "^1.22.0",
     "mysql2": "^2.1.0"
   },
