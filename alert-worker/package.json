@@ -14,7 +14,7 @@
     "bluebird": "^3.7.2",
     "dotenv": "^8.2.0",
     "lodash": "^4.17.15",
-    "luxon": "^1.22.0",
+    "luxon": "^1.28.1",
     "mysql2": "^2.1.0"
   },
   "devDependencies": {
